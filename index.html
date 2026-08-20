@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Gastos</title>
+<link rel="stylesheet" href="css/variables.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/utilities.css">
+<link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+  <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="sidebar">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar__brand">
+        <span aria-hidden="true">💰</span>
+        <span class="sidebar__brand-name">Control de Gastos</span>
+      </div>
+
+      <nav class="sidebar__nav" aria-label="Navegación principal">
+        <a class="sidebar__link" href="#/dashboard" data-route="/dashboard">
+          <span class="sidebar__icon" aria-hidden="true">📊</span> Dashboard
+        </a>
+
+        <p class="sidebar__group-title">Finanzas</p>
+        <a class="sidebar__link" href="#/ingresos" data-route="/ingresos"><span class="sidebar__icon" aria-hidden="true">💵</span> Ingresos</a>
+        <a class="sidebar__link" href="#/gastos" data-route="/gastos"><span class="sidebar__icon" aria-hidden="true">🧾</span> Gastos</a>
+        <a class="sidebar__link" href="#/semana" data-route="/semana"><span class="sidebar__icon" aria-hidden="true">📅</span> Semana</a>
+        <a class="sidebar__link" href="#/mes" data-route="/mes"><span class="sidebar__icon" aria-hidden="true">🗓️</span> Mes</a>
+        <a class="sidebar__link" href="#/presupuesto" data-route="/presupuesto"><span class="sidebar__icon" aria-hidden="true">🎯</span> Presupuesto</a>
+
+        <p class="sidebar__group-title">Mandado</p>
+        <a class="sidebar__link" href="#/mandado/lista" data-route="/mandado/lista"><span class="sidebar__icon" aria-hidden="true">🛒</span> Mi lista</a>
+        <a class="sidebar__link" href="#/mandado/productos" data-route="/mandado/productos"><span class="sidebar__icon" aria-hidden="true">🥕</span> Productos</a>
+        <a class="sidebar__link" href="#/mandado/categorias" data-route="/mandado/categorias"><span class="sidebar__icon" aria-hidden="true">🏷️</span> Categorías</a>
+        <a class="sidebar__link" href="#/mandado/tiendas" data-route="/mandado/tiendas"><span class="sidebar__icon" aria-hidden="true">🏬</span> Tiendas</a>
+        <a class="sidebar__link" href="#/mandado/comparar" data-route="/mandado/comparar"><span class="sidebar__icon" aria-hidden="true">⚖️</span> Comparar precios</a>
+        <a class="sidebar__link" href="#/mandado/historial" data-route="/mandado/historial"><span class="sidebar__icon" aria-hidden="true">📈</span> Historial de precios</a>
+
+        <p class="sidebar__group-title">General</p>
+        <a class="sidebar__link" href="#/calendario" data-route="/calendario"><span class="sidebar__icon" aria-hidden="true">📆</span> Calendario</a>
+        <a class="sidebar__link" href="#/reportes" data-route="/reportes"><span class="sidebar__icon" aria-hidden="true">📑</span> Reportes</a>
+        <a class="sidebar__link" href="#/configuracion" data-route="/configuracion"><span class="sidebar__icon" aria-hidden="true">⚙️</span> Configuración</a>
+      </nav>
+    </aside>
+
+    <div class="app-main">
+      <header class="app-header">
+        <h1 class="app-header__title" id="pageTitle">Dashboard</h1>
+        <span class="app-header__saved" id="lastSavedLabel"></span>
+      </header>
+      <main class="app-content" id="appContent" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
