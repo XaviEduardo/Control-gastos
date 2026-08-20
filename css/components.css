@@ -6,6 +6,46 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Variante más densa para contextos con varias cards apiladas (ej. items de una lista). */
+.card--compact { padding: var(--space-md); }
+
+/* ---------- Tipografía formal (título de sección / de card, distinto de la etiqueta
+   tipo "eyebrow" de .summary-card__label) ---------- */
+.section-title { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--color-text); }
+.card-title { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--color-text); }
+
+/* ---------- Badges de ESTADO vs. tags de METADATO (no deben verse igual) ----------
+   Badge: pill, uppercase, color semántico — para Activo/Inactivo/Completado/Pendiente/etc.
+   Tag: rectangular pequeño, sin uppercase, tono neutro — para datos como "Lácteos"/"1.5 L". */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.badge--success { color: var(--color-success); background: var(--color-success-soft); }
+.badge--warning { color: var(--color-warning); background: var(--color-warning-soft); }
+.badge--danger { color: var(--color-danger); background: var(--color-danger-soft); }
+.badge--info { color: var(--color-info); background: var(--color-info-soft); }
+.badge--neutral { color: var(--color-text-secondary); background: var(--color-surface-secondary); }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -124,11 +164,25 @@
 
 .gap-xs { gap: var(--space-xs); }
 
-.toolbar { flex-wrap: wrap; }
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
 .toolbar input, .toolbar select { width: auto; }
 
-.summary-card__label { color: var(--color-text-muted); font-size: var(--font-size-sm); }
-.summary-card__value { font-size: var(--font-size-xl); font-weight: 700; margin-top: 4px; }
+/* Etiqueta tipo "eyebrow": para encabezados de card/KPI (ej. "Ingresos", "Gastos por
+   categoría"). Distinta de .card-title/.section-title (esas son títulos, esto es metadato). */
+.summary-card__label {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.summary-card__value { font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); margin-top: 4px; color: var(--color-text); }
 
 .breakdown-list { display: flex; flex-direction: column; gap: 6px; }
 .breakdown-list li { display: flex; justify-content: space-between; font-size: var(--font-size-sm); }
@@ -254,4 +308,4 @@
   border: 1px solid var(--color-border);
   font-size: var(--font-size-sm);
 }
-.comparison-product-item--best { border-color: var(--color-success); background: rgba(31, 157, 85, 0.08); }
+.comparison-product-item--best { border-color: var(--color-success); background: var(--color-success-soft); }
