@@ -316,21 +316,25 @@ export function renderPriceHistoryModule(container) {
         <label for="${formId}-store">Tienda</label>
         <select id="${formId}-store" name="storeId">${stores.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')}</select>
       </div>
-      <div>
-        <label for="${formId}-quantity">Cantidad (presentación)</label>
-        <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" required value="${existing?.quantity ?? 1}">
+      <div class="form-row">
+        <div>
+          <label for="${formId}-quantity">Cantidad (presentación)</label>
+          <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" required value="${existing?.quantity ?? 1}">
+        </div>
+        <div>
+          <label for="${formId}-unit">Unidad</label>
+          <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
+        </div>
       </div>
-      <div>
-        <label for="${formId}-unit">Unidad</label>
-        <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
-      </div>
-      <div>
-        <label for="${formId}-price">Precio</label>
-        <input type="number" id="${formId}-price" name="price" min="0" step="0.01" required value="${existing?.price ?? ''}">
-      </div>
-      <div>
-        <label for="${formId}-date">Fecha</label>
-        <input type="date" id="${formId}-date" name="date" required value="${existing?.date || toISODate(new Date())}">
+      <div class="form-row">
+        <div>
+          <label for="${formId}-price">Precio</label>
+          <input type="number" id="${formId}-price" name="price" min="0" step="0.01" required value="${existing?.price ?? ''}">
+        </div>
+        <div>
+          <label for="${formId}-date">Fecha</label>
+          <input type="date" id="${formId}-date" name="date" required value="${existing?.date || toISODate(new Date())}">
+        </div>
       </div>
       <div>
         <label for="${formId}-notes">Notas (opcional)</label>

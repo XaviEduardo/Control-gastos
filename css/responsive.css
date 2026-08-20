@@ -1,5 +1,26 @@
 @media (max-width: 1024px) {
   :root { --sidebar-width: 220px; }
+
+  /* QA UI-7: la fila densa de .grocery-item-row (checkbox 44 + est 100 + real 100 + menu 44,
+     más los mínimos de contenido de qty-wrap ~130px) necesita ~600px+ para no desbordar. Con
+     el sidebar de tablet (220px) más el padding de .app-content/.card, el espacio real cae
+     por debajo de eso entre ~640-1023px — un overflow horizontal real que no existía antes de
+     UI-3 (la fila vieja usaba flex-wrap, que degradaba envolviendo en vez de desbordar). Se
+     extiende la tarjeta apilada (idéntica a la de <640px) hasta 1024px; el layout denso queda
+     solo para desktop real (>1024px, sidebar de 260px), donde sí hay espacio de sobra. */
+  .grocery-item-row {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-areas:
+      "check name name menu"
+      "qty qty qty qty"
+      "est est real real"
+      "subtotal subtotal subtotal subtotal";
+    row-gap: var(--space-xs);
+    padding: var(--space-md) 0;
+  }
+  .grocery-item-row__field-label,
+  .grocery-item-row__subtotal-label { display: block; }
+  .grocery-item-row__subtotal-wrap { flex-direction: row; justify-content: space-between; align-items: baseline; }
 }
 
 /* Mobile (< 640px, estrategia documentada en docs/responsive-plan.md): sidebar = drawer.
@@ -29,23 +50,6 @@
   .sidebar-toggle { display: flex; }
   .app-header { padding-left: 64px; }
 
-  /* Mandado > Mi lista: mismo DOM de .grocery-item-row (ver css/components.css), solo
-     cambia el template a una tarjeta apilada. Las etiquetas Est./Real/Subtotal (ocultas
-     en escritorio) se muestran aquí porque ya no hay una fila densa que dé contexto visual. */
-  .grocery-item-row {
-    grid-template-columns: repeat(4, 1fr);
-    grid-template-areas:
-      "check name name menu"
-      "qty qty qty qty"
-      "est est real real"
-      "subtotal subtotal subtotal subtotal";
-    row-gap: var(--space-xs);
-    padding: var(--space-md) 0;
-  }
-  .grocery-item-row__field-label,
-  .grocery-item-row__subtotal-label { display: block; }
-  .grocery-item-row__subtotal-wrap { flex-direction: row; justify-content: space-between; align-items: baseline; }
-
   /* Tabla → tarjetas (Productos, Tiendas, Historial de precios, Ingresos, Gastos). Misma
      fuente de datos (ver js/components/table.js): aquí solo se alterna qué vista es visible. */
   .table-wrapper .data-table { display: none; }
@@ -53,6 +57,47 @@
 
   .category-manager-item { padding: var(--space-md) 0; }
   .category-manager-item > span:last-child { gap: var(--space-sm); }
+
+  /* Dashboard/Reportes: charts más bajos en móvil para no forzar tanto scroll vertical
+     (el ancho ya es 100% por el fix de .charts-grid en css/components.css — Chart.js con
+     responsive:true redibuja solo al cruzar este breakpoint, sin instancias nuevas). */
+  .chart-wrapper { height: 220px; }
+
+  /* Calendario: en <640px los badges de conteo (💰🧾🛒) se simplifican a puntos de color
+     sólido — con 3 badges de texto la celda (7 columnas en 320-360px) puede desbordar o
+     volverse ilegible. El detalle completo (montos, categorías) sigue disponible en el
+     panel del día seleccionado (ver docs/ui-ux-audit.md sección G). El número del día NO
+     se reduce (debe seguir siendo legible). */
+  .calendar-grid { gap: 2px; }
+  .calendar-day { padding: 2px 1px; }
+  .calendar-weekday { font-size: 0.7rem; }
+  .calendar-day__badges { gap: 3px; }
+  .calendar-badge__label { display: none; }
+  .calendar-badge {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .calendar-badge--income { background: var(--color-success); }
+  .calendar-badge--expense { background: var(--color-danger); }
+  .calendar-badge--mandado { background: var(--color-warning); }
+
+  /* Formularios largos: casi pantalla completa (ver docs/ui-ux-audit.md sección G). El
+     margen que deja .modal-overlay (var(--space-md), sin cambio) evita que quede pegado al
+     borde real de la pantalla. .modal--compact (confirmaciones, ver confirm-dialog.js) NO
+     tiene override aquí a propósito — nunca debe volverse full-screen. */
+  .modal--form {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: 100%;
+  }
+
+  /* Pares de campos (Cantidad+Unidad, Precio+Fecha, etc.) vuelven a apilarse en móvil —
+     .form-row solo aplica 2 columnas en desktop (ver css/components.css). */
+  .form-row { flex-direction: column; }
 }
 
 @media (max-width: 480px) {
@@ -61,10 +106,4 @@
      que define la regla base de .app-header en css/layout.css. */
   .app-header { padding-right: var(--space-md); padding-left: 60px; }
   .empty-state { margin: var(--space-lg) auto; padding: var(--space-lg); }
-
-  .calendar-grid { gap: 2px; }
-  .calendar-day { padding: 2px 1px; }
-  .calendar-day__number { font-size: 0.7rem; }
-  .calendar-badge { font-size: 0.55rem; padding: 0 2px; }
-  .calendar-weekday { font-size: 0.7rem; }
 }

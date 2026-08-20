@@ -35,13 +35,15 @@ export function openMovementForm({ type, existing, defaultDate, onSaved }) {
       <label for="${formId}-description">Concepto</label>
       <input type="text" id="${formId}-description" name="description" required value="${escapeHtml(existing?.description || '')}">
     </div>
-    <div>
-      <label for="${formId}-amount">Cantidad</label>
-      <input type="number" id="${formId}-amount" name="amount" min="0" step="0.01" required value="${existing?.amount ?? ''}">
-    </div>
-    <div>
-      <label for="${formId}-date">Fecha</label>
-      <input type="date" id="${formId}-date" name="date" required value="${existing?.date ? existing.date.slice(0, 10) : (defaultDate || toISODate(new Date()))}">
+    <div class="form-row">
+      <div>
+        <label for="${formId}-amount">Cantidad</label>
+        <input type="number" id="${formId}-amount" name="amount" min="0" step="0.01" required value="${existing?.amount ?? ''}">
+      </div>
+      <div>
+        <label for="${formId}-date">Fecha</label>
+        <input type="date" id="${formId}-date" name="date" required value="${existing?.date ? existing.date.slice(0, 10) : (defaultDate || toISODate(new Date()))}">
+      </div>
     </div>
     <div>
       <label for="${formId}-category">${isIncome ? 'Tipo' : 'Categoría'}</label>

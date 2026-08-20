@@ -23,7 +23,10 @@ img, svg { max-width: 100%; display: block; }
 
 input, select, textarea {
   font-family: inherit;
-  font-size: var(--font-size-md);
+  /* 16px explícito (no var(--font-size-md), que es 15px): por debajo de 16px, Safari en iOS
+     hace zoom automático al enfocar el campo — no es un tamaño de diseño, es el umbral real
+     del navegador. */
+  font-size: 16px;
   color: var(--color-text);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -60,7 +63,10 @@ label {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 16px;
+  /* 12px verticales (antes 10px): con line-height 1.5 y font-size-md, ~10px se quedaba un
+     poco corto de los ~44px táctiles objetivo (ver docs/responsive-plan.md) — sobre todo
+     relevante en footers de modal (Guardar/Cancelar, Eliminar). */
+  padding: 12px 16px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   font-size: var(--font-size-md);

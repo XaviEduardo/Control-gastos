@@ -29,6 +29,7 @@ export function confirmDialog({ title = 'Confirmar', message = '', confirmText =
       content: `<p>${message}</p>`,
       footer,
       onClose: () => resolveOnce(false),
+      variant: 'compact',
     });
 
     cancelBtn.addEventListener('click', () => modal.close());

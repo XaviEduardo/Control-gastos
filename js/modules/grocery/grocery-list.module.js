@@ -461,13 +461,15 @@ export function renderGroceryListModule(container) {
         <label for="${formId}-category">Categoría</label>
         <select id="${formId}-category" name="categoryId">${categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</select>
       </div>
-      <div>
-        <label for="${formId}-quantity">Cantidad</label>
-        <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" value="1" required>
-      </div>
-      <div>
-        <label for="${formId}-unit">Unidad</label>
-        <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
+      <div class="form-row">
+        <div>
+          <label for="${formId}-quantity">Cantidad</label>
+          <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" value="1" required>
+        </div>
+        <div>
+          <label for="${formId}-unit">Unidad</label>
+          <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
+        </div>
       </div>
       <div>
         <label for="${formId}-price">Precio estimado por unidad (opcional)</label>

@@ -119,6 +119,290 @@ Estado: `pendiente` | `en progreso` | `hecho`
 - **Validado:** `node --check` 50/50 OK tras todas las correcciones; `grep -r "localStorage\." js/` confirma un único punto de acceso (`core/storage.js`); ningún `console.log` de depuración en el código; catches informan al usuario, ninguno silencioso.
 
 ---
+
+## Fases UI (rama `Feat-UX-UI`) — modernización visual/responsive
+
+Basadas en `docs/ui-ux-audit.md` (diagnóstico) y `docs/responsive-plan.md` (guía táctica).
+No reemplazan ni reabren las Fases 0-10 (MVP funcional ya completo) — son una capa de
+modernización visual/responsive sobre la misma base funcional.
+
+### UI-1 — Foundation visual — **hecho**
+- [x] `css/variables.css`: tokens de marca (`--color-primary-hover`, `--color-primary-soft`),
+  superficies (`--color-surface-secondary`), texto (`--color-text-secondary`), pares
+  sólido/suave para success/warning/danger/info (`--color-*-soft`), spacing (`--space-2xl`),
+  tipografía (`--font-size-xs`/`--font-size-2xl`, `--font-weight-medium`/`-bold`,
+  `--line-height-*`). Paleta y demás tokens existentes sin cambios de valor (salvo el
+  renombre de `--color-primary-dark` → `--color-primary-hover`, mismo valor, único
+  consumidor actualizado en `base.css`).
+- [x] `css/base.css`: botones con `padding` ligeramente mayor (más cerca de 40-44px táctil),
+  estado `:disabled` en botones e inputs (antes inexistente), hook `.input--error` para
+  validación inline futura, patrón `.btn--icon` (40×40px, sin aplicar aún en ningún módulo).
+- [x] `css/components.css`: `.card--compact`, `.section-title`/`.card-title` (nuevas, sin
+  consumidores todavía), sistema `.badge`/`.badge--*` (estado) y `.tag` (metadato) formalizado
+  y separado, `.toolbar` ahora auto-contenido (`display:flex` propio, ya no depende de que
+  cada módulo apile las utilidades `.flex .justify-between .items-center .gap-sm` — retrocompatible),
+  `.summary-card__label` con tratamiento "eyebrow" (uppercase + letter-spacing, ver nota de
+  decisión abajo), `.summary-card__value` usa el nuevo `--font-size-2xl` (más presencia de
+  las cifras KPI frente al título de página), un `rgba(...)` hardcodeado en
+  `.comparison-product-item--best` sustituido por `--color-success-soft`.
+- [x] `css/utilities.css`: `.text-secondary`, `.text-xs` (nuevas, aditivas).
+- **No se tocó:** `css/layout.css`, `css/responsive.css`, ningún archivo `.js`, ningún `.html`
+  (confirmado por `git diff --stat`: solo 4 archivos CSS modificados).
+- **Nota de decisión (no estaba en el plan original tal cual):** `.summary-card__label` se
+  usa hoy tanto para etiquetas cortas de KPI ("Ingresos") como para encabezados de sección
+  más largos ("Presupuestos por categoría (mensual)"). Se aplicó el tratamiento eyebrow a
+  **todas** sus instancias por igual (sin retocar JS/markup en esta fase) — es una decisión
+  deliberadamente uniforme, no una inconsistencia. Si al revisar visualmente algún encabezado
+  largo se ve demasiado denso en mayúsculas, la corrección natural es introducir un
+  modificador (ej. `.summary-card__label--title`) en una fase posterior que toque esos
+  módulos, no revertir el token base.
+- **Validado:** balance de llaves y `var()` de cada token verificado manualmente línea por
+  línea (no hay linter de CSS en el proyecto); confirmado que ningún archivo `.js` referencia
+  variables CSS directamente (grep sin resultados) — cero riesgo de romper JS. Sin navegador
+  disponible en esta sesión para captura visual — pendiente que el usuario confirme viendo
+  Dashboard/Ingresos/Gastos/Mandado/Productos/Calendario/Configuración.
+
+### UI-2 — Sidebar, drawer y navegación móvil — **hecho**
+- [x] `css/layout.css`: `.sidebar` con `min-height:100vh; height:100dvh` (piso seguro +
+  ajuste al viewport visual real), padding con `env(safe-area-inset-*)` en sidebar/header/
+  toggle, `-webkit-overflow-scrolling:touch`.
+- [x] `css/responsive.css`: breakpoint del drawer movido a `max-width:639px` (estrategia
+  documentada: móvil <640/tablet 640-1023/desktop ≥1024), `body.sidebar-open{overflow:hidden}`
+  como scroll-lock, ambos scopeados dentro del mismo media query (se autoanulan al cruzar a
+  tablet/desktop sin necesitar limpieza por JS).
+- [x] `index.html`: `viewport-fit=cover` agregado al meta viewport (requisito previo para que
+  `env(safe-area-inset-*)` resuelva a algo distinto de 0).
+- [x] `js/app.js`: `setupSidebarToggle()` revisado — un solo listener por control (sin
+  duplicados), overlay cierra el drawer, navegación ya cerraba el drawer (`updatePageHeader`),
+  se agregó un listener `matchMedia('(min-width:640px)')` que fuerza el cierre si el viewport
+  crece mientras el drawer está abierto.
+- **No se tocó:** Mandado/Productos/servicios/repositorios/cálculos/lógica de Calendario.
+- **Bug corregido:** el bug reproducible de scroll del sidebar (abrir → navegar → Calendario →
+  scroll roto) se resolvió con `100dvh` + scroll-lock; causa raíz confirmada en
+  `docs/ui-ux-audit.md` sección C.
+
+### UI-3 — Mandado Mobile — **hecho**
+- [x] `js/modules/grocery/grocery-list.module.js`: `renderItemRow()` reescrito sobre un único
+  DOM compartido por escritorio y móvil (CSS Grid con `grid-template-areas`, sin duplicar
+  elementos ni listeners). Se añadió un menú `⋮` (`buildActionMenu()`) que agrupa "Notas" y
+  "Quitar de la lista" (antes dos botones sueltos); un único listener de `click` en
+  `document` por vista cierra cualquier menú abierto al hacer click fuera (no uno por fila),
+  removido al salir del módulo vía el valor de retorno de `renderGroceryListModule` (el router
+  ya soporta cleanup opcional por ruta). Etiquetas "Est./{unidad}" y "Real/{unidad}" (dinámicas
+  según `item.unit`) y "Subtotal" agregadas al markup, ocultas por CSS en escritorio (se sigue
+  usando el `placeholder` del input) y visibles en móvil.
+- [x] `css/components.css`: `.grocery-item-row` ahora es `display:grid` (antes `flex-wrap`)
+  con una plantilla de una sola fila para escritorio; nuevo componente `.action-menu`
+  (`__toggle`/`__panel`/`__item`, con variante `--danger`).
+- [x] `css/responsive.css`: dentro del mismo bloque `@media (max-width:639px)` de UI-2, override
+  de `grid-template-areas` de `.grocery-item-row` a una tarjeta apilada (checkbox+nombre+menú /
+  cantidad / estimado·real / subtotal) y se muestran las etiquetas antes ocultas.
+- **No se tocó:** `groceryService.js`, ningún repositorio, ninguna regla de cálculo KG/UNIT
+  (la presentación sigue sin participar en el subtotal UNIT).
+- **Simplificaciones deliberadas frente al mockup ilustrativo:** no se repite el nombre de la
+  categoría dentro de cada tarjeta (ya aparece una vez en el encabezado de `renderCategoryGroup`,
+  evita redundancia); no se fabricó un segundo dato de "presentación" (ej. "1.5 L") junto a la
+  cantidad porque el modelo de datos actual solo tiene `quantity`+`unit`, y agregarlo requeriría
+  tocar el modelo/servicios (fuera de alcance de esta fase).
+- **Sin navegador disponible en esta sesión** para medir visualmente los viewports de la matriz
+  de prueba — pendiente que el usuario confirme en `http://localhost:5501/#/mandado/lista`
+  (320×568 a 1440×900) y la matriz de persistencia (cantidad/estimado/real/comprado/eliminar →
+  F5 → verificar).
+
+### UI-4 — Tablas/listados responsive — **hecho**
+- [x] `js/components/table.js`: `renderTable()` recibe un parámetro opcional `renderCard(row, actionsNode)`.
+  Cuando se pasa, además de `<table>` construye una `.responsive-card-list` a partir de las
+  mismas `rows` (sin estado ni fuente de datos duplicada) — CSS decide cuál de las dos vistas
+  se muestra según el breakpoint. `rowActions(row)` se invoca una vez por representación (tabla
+  y tarjeta), cada una con su propio nodo/listeners independientes — no hay nodo compartido ni
+  listener huérfano.
+- [x] `js/components/action-menu.js` (nuevo): `createActionMenu(label, actions)` +
+  `ensureActionMenuOutsideClick()` — patrón `⋮` generalizado a partir del que ya existía en
+  Mandado (UI-3), reutilizado por los 5 módulos de esta fase. El cierre-al-click-afuera es un
+  único listener global (idempotente, se registra una sola vez por carga de página) que
+  consulta el DOM en vivo — no requiere limpieza al navegar entre módulos.
+- [x] `css/components.css`: `.responsive-card-list` (+ `__item`/`__header`/`__title`/`__amount`/
+  `__subtitle`/`__body`), toque de espaciado en `.category-manager-item` (`flex-wrap`).
+- [x] `css/responsive.css`: dentro del mismo bloque `<640px`, `.table-wrapper .data-table{display:none}`
+  + `.responsive-card-list{display:flex}` (alterna vista sin JS, así que cruzar el breakpoint en
+  resize no puede duplicar nodos/listeners — no hay nada que ejecutar en el cruce); padding
+  ampliado de `.category-manager-item` en móvil.
+- [x] Módulos migrados (tabla sin cambios de datos/cálculos, `buildRowActions` ahora devuelve
+  `createActionMenu(...)`, más `render*Card()` nuevo): `products.module.js`, `stores.module.js`,
+  `price-history.module.js` (tarjeta: fecha+tienda / producto·presentación / precio / normalizado),
+  `income.module.js` y `expense.module.js` (tarjeta: concepto+monto arriba, categoría·fecha abajo,
+  menú `⋮` al pie — jerarquía visual: el monto usa `--font-size-xl`/700).
+- **No se tocó** ningún repositorio ni servicio de cálculo (`financeService.js`, `priceService.js`,
+  `groceryService.js`).
+- **Corrección posterior (mismo día):** el menú `⋮` usaba `position:absolute`, lo que lo dejaba
+  atrapado por ancestros con `overflow` (ej. `.data-table{overflow:hidden}`, `.table-wrapper` con
+  scroll) o simplemente se salía del viewport sin recolocarse — bug reportado por el usuario
+  ("la tarjeta sale para abajo y no se visualiza"). Se cambió a `position:fixed` con coordenadas
+  calculadas en JS (`getBoundingClientRect` + límites de viewport + flip hacia arriba si no cabe
+  abajo), inmune a `overflow`/scroll de cualquier ancestro y consistente en desktop, iOS Safari y
+  Android Chrome. Al mismo tiempo se migró `js/modules/grocery/grocery-list.module.js` (Mandado,
+  UI-3) a este mismo componente compartido (antes tenía su propia copia local con el mismo bug de
+  posicionamiento) — ya no hace falta su `document.addEventListener` propio ni el cleanup por
+  ruta, así que `renderGroceryListModule` dejó de retornar una función de limpieza.
+- **Categorías:** solo se ajustó espaciado/touch de `.category-manager-item` (`flex-wrap` +
+  padding en móvil); sigue siendo una lista, sin cambio estructural, como se indicó.
+- **Simplificación deliberada:** la tarjeta de Productos no inventa una cantidad de presentación
+  (ej. "1.5 L") — el modelo de `Product` solo tiene `preferredUnit` (sin cantidad numérica), así
+  que la tarjeta muestra "Unidad preferida: {unidad}" en vez de fabricar un dato inexistente.
+- **Sin navegador disponible en esta sesión** para verificar visualmente el resize desktop↔mobile
+  ni medir overflow horizontal — pendiente que el usuario confirme en
+  `http://localhost:5501/#/mandado/productos` (y tiendas/historial/ingresos/gastos) con DevTools,
+  además de la matriz de persistencia (crear/editar/duplicar/eliminar/activar-desactivar → F5).
+
+### UI-5 — Dashboard, Calendario y Reportes responsive — **hecho**
+- [x] `css/components.css`: `.stats-grid` (`minmax(160px,…)` → `minmax(min(220px, 100%), 1fr)`)
+  y `.charts-grid` (`minmax(320px,…)` → `minmax(min(280px, 100%), 1fr)`) — el bug diagnosticado
+  (`320px` de mínimo puede exceder el ancho real en viewports 320-360px) se corrige con la
+  técnica `min(N, 100%)`: si el contenedor es más angosto que el mínimo, éste cae a `100%` y
+  `auto-fit` no tiene otra opción que 1 columna — nunca puede exceder el espacio disponible, sin
+  media queries adicionales. Se subió el mínimo de `.stats-grid` de 160→220px porque con 160px
+  un valor monetario grande (`--font-size-2xl`) en 2 columnas quedaba visualmente apretado en
+  375-428px. `.chart-card` ganó `min-width:0` (un hijo de grid con contenido ancho —el canvas—
+  puede forzar el ancho de su columna aunque el `minmax` diga lo contrario, si no se resetea el
+  `min-width` implícito). `.top-expenses-list li` ganó `flex-wrap:wrap` (usado también por
+  Calendario/Mensual/Comparador — cambio defensivo, no altera nada cuando ya cabe en una línea).
+- [x] `css/responsive.css` (dentro del mismo bloque `<640px`): `.chart-wrapper` baja de 280px a
+  220px de alto (menos scroll vertical en móvil; Chart.js con `responsive:true` ya redibuja solo
+  al cruzar el breakpoint, sin instancias nuevas — ver "CHARTS" abajo). Calendario: los badges de
+  conteo (💰🧾🛒) se simplifican a puntos de color sólido de 7×7px (antes texto a 0.55rem, ya en
+  el límite de legibilidad y con riesgo real de desbordar la celda con 3 badges en 320-360px); el
+  número del día NO se reduce (se quitó el `font-size:0.7rem` que tenía antes) — el detalle
+  completo (montos, categorías, recurrencia) sigue disponible en el panel del día seleccionado.
+- [x] `js/modules/calendar/calendar.module.js`: el texto de cada badge (emoji+conteo) se envolvió
+  en un `<span class="calendar-badge__label">` para poder ocultarlo por CSS en móvil sin tocar
+  ningún dato ni lógica de fechas — mismo `occurrenceMap`/`getOccurrencesInRange` de siempre.
+- [x] `js/modules/reports/reports.module.js`: el selector Semana/Mes/Año ganó `flex-wrap` (nueva
+  utilidad `.flex-wrap` en `css/utilities.css`) — defensivo, sin cambio visual cuando ya cabe.
+- **No se tocó** ninguna lógica financiera/de cálculo (`financeService.js`, `budgetService.js`,
+  `comparisonService.js`, `priceService.js`, `recurrenceService.js`) ni la librería/lógica de
+  fechas de Calendario (`core/dates.js`, `getOccurrencesInRange`) — todo el trabajo fue CSS +
+  una envoltura de markup puramente presentacional.
+- **CHARTS (Chart.js):** dashboard/reportes/historial de precios ya destruyen todas sus
+  instancias (`destroyCharts()`) al inicio de cada `render()` y las recrean solo cuando el
+  usuario cambia mes/año/periodo/producto — un resize de ventana NUNCA llama a `render()`, así
+  que no puede duplicar ni acumular instancias; Chart.js redimensiona el canvas EXISTENTE vía su
+  propio `responsive:true`/ResizeObserver. Confirmado leyendo el código, no hay navegador en esta
+  sesión para verificarlo visualmente.
+- **Sin navegador disponible en esta sesión** — pendiente que el usuario confirme en
+  `http://localhost:5501/#/dashboard` (vacío, con datos, cambio mes/año), `#/calendario`
+  (anterior/siguiente/seleccionar día/320px) y `#/reportes` (filtros/gráficos/resize) contra la
+  matriz de viewports pedida (320×568 a 1440×900).
+
+### UI-6 — Formularios, modales y touch UX — **hecho**
+- [x] `css/base.css`: `input/select/textarea` a `font-size:16px` explícito (antes 15px vía
+  `--font-size-md`) — por debajo de 16px, Safari iOS hace zoom automático al enfocar un
+  campo; `.btn` sube de `10px`→`12px` de padding vertical (más cerca de los ~44px táctiles,
+  relevante sobre todo en footers de modal).
+- [x] `css/components.css` — **modal reestructurado** (`.modal-overlay`/`.modal`/`.modal-header`/
+  `.modal-body`/`.modal-footer`):
+  - `.modal-overlay`: `min-height:100vh; height:100dvh` (mismo patrón que `.sidebar` de UI-2).
+  - `.modal`: pasa a `display:flex; flex-direction:column` — header y footer quedan fijos,
+    solo `.modal-body` (`flex:1 1 auto; min-height:0; overflow-y:auto`) scrollea. Antes
+    `overflow-y:auto` vivía en `.modal` completo: en un formulario largo el footer
+    (Guardar/Cancelar) podía desplazarse fuera de vista junto con el resto — el bug que
+    pedía evitar "footer inaccesible".
+  - `.modal-close`: 44×44px (antes solo `font-size:1.5rem`, sin `width`/`height`).
+  - `.modal-footer`: `padding-bottom: max(var(--space-md), env(safe-area-inset-bottom))`.
+  - Nueva variante `.modal--compact` (max-width 420px, sin override en móvil) vs. la variante
+    por defecto `.modal--form` (override <640px → casi pantalla completa, ver abajo).
+  - Nuevo `.form-row` (2 columnas en desktop, `flex:1 1 0` + `min-width:0` por hijo) para
+    pares de campos cortos donde aporta — NO es el layout por defecto de `.form-grid`.
+- [x] `js/components/modal.js`: `openModal({..., variant='form'})` — agrega `.modal--${variant}`
+  a la clase del `.modal`. `role="dialog"`, `aria-modal="true"`, `aria-label`, el `aria-label`
+  del botón cerrar y `:focus-visible` (global, sin tocar) se conservan sin cambios.
+- [x] `js/components/confirm-dialog.js`: pasa `variant:'compact'` — un "¿Eliminar producto?"
+  sigue siendo pequeño y centrado en cualquier viewport, nunca se convierte en full-screen.
+- [x] `css/responsive.css` (mismo bloque `<640px`): `.modal--form{width:100%;max-width:none;
+  height:100%;max-height:100%}` (dentro del margen que ya deja `.modal-overlay`, por eso es
+  "casi" pantalla completa, no borde a borde) — `.modal--compact` no tiene entrada aquí, a
+  propósito. `.form-row{flex-direction:column}` para volver a apilar en móvil.
+- [x] Pares `.form-row` aplicados donde el ejemplo del pedido aporta claramente (Cantidad+Unidad,
+  Precio+Fecha) — NO aplicado globalmente: `grocery-list.module.js` (Cantidad+Unidad),
+  `price-history.module.js` (Cantidad+Unidad y Precio+Fecha), `income.module.js`,
+  `expense.module.js` y `shared/movement-form.js` (Cantidad+Fecha — mismo par que
+  "Precio+Fecha" del ejemplo; estos formularios llaman a su campo de monto "Cantidad", no
+  "Precio"). `products.module.js`/`stores.module.js`/`budget.module.js` no tienen un par
+  equivalente y se dejaron sin cambios.
+- **TECLADO VIRTUAL:** no se agregó JS de detección (`visualViewport`, etc.) — con
+  `100dvh` + body scrolleable + footer fijo dentro del flex-column, el footer permanece
+  visible por encima del teclado sin lógica adicional; es el patrón estándar suficiente
+  para este alcance.
+- **No se tocó** ninguna validación (`isRequired`/`isPositiveNumber`/`isValidDate`) ni el envío
+  de datos (`FormData`) — los pares `.form-row` son solo un `<div>` contenedor adicional;
+  todos los campos siguen teniendo su `name`/`id` propio, así que `FormData(form)` y
+  `form.querySelector('#id')` no cambian de comportamiento.
+- **Sin navegador disponible en esta sesión** — pendiente que el usuario confirme abrir cada
+  formulario (ingreso, gasto, producto, precio, mandado, presupuesto) y la confirmación de
+  eliminar en `http://localhost:5501`, incluyendo abrir/cerrar repetidamente y un formulario
+  largo (ej. Gasto, con regla personalizada visible) contra la matriz de viewports.
+
+### UI-7 — QA responsive integral y estabilización — **hecho**
+Sin agregar funcionalidad ni rediseñar: se validó el trabajo de UI-1..UI-6 y se corrigió lo
+encontrado. Verificación en 3 frentes (sin navegador disponible en esta sesión — ver nota final):
+`git diff --stat` contra `Development` para confirmar exactamente qué se tocó; un agente de
+lectura para el barrido mecánico (rutas, compatibilidad GitHub Pages, `localStorage` fuera de
+`StorageService`, restos de debug, `!important`, clases CSS duplicadas); un segundo agente para
+trazar 6 secuencias de interacción específicas (sidebar repetido, menú ⋮ singleton, resize
+tabla↔tarjeta, ciclo de vida de Chart.js, modal abrir/cerrar repetido, ciclo de vida de un ítem
+de Mandado); y una revisión propia línea por línea de los 6 archivos CSS completos.
+
+- [x] **Regresión crítica encontrada y corregida:** `.grocery-item-row` (Mandado > Mi lista)
+  usaba en escritorio un grid de 7 columnas con varias pistas de ancho fijo (44+100+100+44px)
+  más los mínimos de contenido de `qty-wrap` (~130px) — una suma mínima de ~600px+. Con el
+  sidebar de tablet (220px, `<1024px`) más el padding de `.app-content`/`.card`, el espacio
+  real cae por debajo de eso entre ~640-1023px (incluye 768×1024, viewport de alta prioridad de
+  esta fase) — overflow horizontal real que **no existía antes de UI-3** (la fila anterior usaba
+  `flex-wrap`, que envolvía en vez de desbordar). Corregido en `css/responsive.css`: la tarjeta
+  apilada (idéntica a la de móvil) ahora se extiende hasta `1024px`; el layout denso de escritorio
+  queda solo para viewports realmente anchos (`>1024px`, sidebar de 260px), donde sí hay espacio.
+  Este es el único cambio de código de esta fase — todo lo demás fue verificación.
+- [x] **Todo lo demás: PASS**, sin cambios necesarios —
+  - Rutas: las 16 rutas están registradas e implementadas en `js/app.js` (nada cae a
+    `renderPlaceholder`).
+  - GitHub Pages: `core/router.js` sigue siendo 100% hash-based (`#/...`), sin History
+    API/pushState; sin `fetch`/backend en todo `js/`; sin rutas ni assets con `/` absoluto; el
+    único recurso externo es el `<script>` de Chart.js por CDN en `index.html` (esperado).
+  - `localStorage` solo se usa dentro de `core/storage.js` — ningún módulo lo tocó directo.
+  - Sin `console.log`/`debugger`/restos de debug en `js/`.
+  - `!important`: una sola ocurrencia (`.hidden` en `utilities.css`), preexistente y esperada.
+  - Ninguna clase CSS (`.modal`, `.charts-grid`, `.stats-grid`, `.calendar-badge`,
+    `.action-menu__panel`, `.form-row`, etc.) está duplicada/redefinida en dos archivos con
+    valores contradictorios.
+  - Sidebar: un solo listener por control (`setupSidebarToggle()` se llama una sola vez desde
+    `bootstrap()`), `body.sidebar-open` se limpia en cada cambio de ruta sin excepción — no hay
+    forma de que el scroll quede bloqueado tras cerrar el drawer.
+  - Menú ⋮: `ensureActionMenuOutsideClick()` con guarda `boundOnce` — un solo listener real sin
+    importar cuántos de los 6 módulos lo invoquen; sin referencias a nodos de una vista ya
+    desmontada.
+  - Tabla↔tarjeta: cruzar los 640px es CSS puro (`display` alternado en `responsive.css`), cero
+    JS en el cruce — no puede duplicar DOM ni listeners.
+  - Chart.js: `destroyCharts()` es lo primero en cada `render()` de Dashboard/Reportes/Historial,
+    y las 3 rutas retornan `() => destroyCharts()` para el cleanup del router.
+  - Modal: `openModal()` cierra cualquier modal previo al abrir uno nuevo; el listener de
+    `keydown` se agrega/quita simétricamente en cada ciclo.
+  - Mandado: `render()` reconstruye `root.innerHTML` por completo en cada mutación — sin
+    posibilidad de filas obsoletas acumuladas con listas grandes/mixtas.
+- **Pendiente menor documentado (cosmético, no se toca):** `.btn--icon` (definida en UI-1) sigue
+  sin usarse en ningún módulo — no es una regresión, es un patrón dejado listo a propósito para
+  una fase futura; los botones-ícono ya construidos (checkbox de Mandado, `⋮`, cerrar de modal)
+  usan sus propias clases dedicadas.
+- **No se tocó ningún archivo de `services/`, `repositories/` ni `core/storage.js`/`core/state.js`**
+  en ninguna fase UI (confirmado con `git diff --stat Development...HEAD`) — CRUD, cálculos,
+  recurrencias, reglas KG/UNIT, presupuestos, precios, comparador y backup/restore corren sobre
+  el mismo código que antes de UI-1, sin cambios.
+- **Sin navegador disponible en esta sesión**: todo lo anterior se verificó por lectura de
+  código/CSS y trazado lógico, no por prueba visual real. Pendiente que el usuario confirme en
+  `http://localhost:5501` contra la matriz de viewports completa (320×568, 360×800, 375×812,
+  390×844, 412×915, 428×926, 768×1024, 1366×768, 1440×900, 1920×1080), con especial atención a
+  768×1024 (el rango recién corregido) y al smoke test de persistencia (crear/F5/editar/F5/
+  eliminar/F5 para ingreso, gasto, producto, ítem de mandado y precio).
+
+---
 ## Backlog priorizado (primeras tareas concretas)
 1. ~~`core/storage.js` + `core/state.js` + documento versionado~~ — hecho.
 2. ~~`core/dates.js`, `core/currency.js`, `core/validators.js`, `core/id.js`, `core/events.js`~~ — hecho.
