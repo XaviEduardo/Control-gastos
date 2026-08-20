@@ -11,6 +11,7 @@ import ExpenseRepository from '../expenses/expense.repository.js';
 import { itemsForList, categoryTotals, listTotals, itemEffectiveSubtotal } from '../../services/groceryService.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { renderStatCard } from '../../components/stat-card.js';
+import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { openModal } from '../../components/modal.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
@@ -23,6 +24,7 @@ const groceryCategoryRepo = createCategoryRepository('groceryCategories');
 const expenseCategoryRepo = createCategoryRepository('expenseCategories');
 
 export function renderGroceryListModule(container) {
+  ensureActionMenuOutsideClick();
   const settings = State.getSettings();
   let selectedListId = settings.selectedGroceryListId || null;
 
@@ -288,10 +290,13 @@ export function renderGroceryListModule(container) {
 
   function renderItemRow(item) {
     const product = ProductRepository.getById(item.productId);
+    const unitLabel = UNIT_OPTIONS.find((u) => u.value === item.unit)?.label || item.unit;
 
     const row = document.createElement('div');
     row.className = `grocery-item-row${item.purchased ? ' grocery-item-row--purchased' : ''}`;
 
+    const checkboxWrap = document.createElement('label');
+    checkboxWrap.className = 'grocery-item-row__checkbox-wrap';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = item.purchased;
@@ -300,10 +305,14 @@ export function renderGroceryListModule(container) {
       GroceryListItemRepository.update(item.id, { purchased: checkbox.checked });
       render();
     });
+    checkboxWrap.appendChild(checkbox);
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'grocery-item-row__name';
     nameSpan.textContent = product?.name || '(producto eliminado)';
+
+    const qtyWrap = document.createElement('div');
+    qtyWrap.className = 'grocery-item-row__qty-wrap';
 
     const qtyInput = document.createElement('input');
     qtyInput.type = 'number';
@@ -331,6 +340,14 @@ export function renderGroceryListModule(container) {
       render();
     });
 
+    qtyWrap.append(qtyInput, unitSelect);
+
+    const estField = document.createElement('div');
+    estField.className = 'grocery-item-row__field grocery-item-row__field--est';
+    const estLabel = document.createElement('span');
+    estLabel.className = 'grocery-item-row__field-label';
+    estLabel.textContent = `Est./${unitLabel}`;
+
     const estInput = document.createElement('input');
     estInput.type = 'number';
     estInput.min = '0';
@@ -348,6 +365,13 @@ export function renderGroceryListModule(container) {
       }
       render();
     });
+    estField.append(estLabel, estInput);
+
+    const realField = document.createElement('div');
+    realField.className = 'grocery-item-row__field grocery-item-row__field--real';
+    const realLabel = document.createElement('span');
+    realLabel.className = 'grocery-item-row__field-label';
+    realLabel.textContent = `Real/${unitLabel}`;
 
     const actualInput = document.createElement('input');
     actualInput.type = 'number';
@@ -366,45 +390,50 @@ export function renderGroceryListModule(container) {
       }
       render();
     });
+    realField.append(realLabel, actualInput);
 
+    const subtotalWrap = document.createElement('div');
+    subtotalWrap.className = 'grocery-item-row__subtotal-wrap';
+    const subtotalLabel = document.createElement('span');
+    subtotalLabel.className = 'grocery-item-row__subtotal-label';
+    subtotalLabel.textContent = 'Subtotal';
     const subtotalSpan = document.createElement('span');
     subtotalSpan.className = 'grocery-item-row__subtotal';
     subtotalSpan.textContent = formatMoney(itemEffectiveSubtotal(item));
+    subtotalWrap.append(subtotalLabel, subtotalSpan);
 
-    const notesBtn = document.createElement('button');
-    notesBtn.type = 'button';
-    notesBtn.className = 'btn btn--ghost';
-    notesBtn.title = 'Notas';
-    notesBtn.textContent = item.notes ? '📝' : '📄';
-    notesBtn.setAttribute('aria-label', 'Editar notas del producto');
-    notesBtn.addEventListener('click', () => {
-      const value = window.prompt('Notas', item.notes || '');
-      if (value !== null) {
-        GroceryListItemRepository.update(item.id, { notes: value });
-        render();
-      }
-    });
-
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'btn btn--danger';
-    delBtn.textContent = '🗑';
-    delBtn.setAttribute('aria-label', 'Quitar producto de la lista');
-    delBtn.addEventListener('click', async () => {
-      const confirmed = await confirmDialog({
-        title: 'Quitar producto',
-        message: `¿Quitar "${product?.name || ''}" de esta lista?`,
-        confirmText: 'Quitar',
+    const menu = createActionMenu(`Más acciones para ${product?.name || 'producto'}`, [
+      {
+        label: item.notes ? 'Notas 📝' : 'Notas',
+        onClick: () => {
+          const value = window.prompt('Notas', item.notes || '');
+          if (value !== null) {
+            GroceryListItemRepository.update(item.id, { notes: value });
+            render();
+          }
+        },
+      },
+      {
+        label: 'Quitar de la lista',
         danger: true,
-      });
-      if (confirmed) {
-        GroceryListItemRepository.remove(item.id);
-        showToast('Producto quitado de la lista');
-        render();
-      }
-    });
+        onClick: async () => {
+          const confirmed = await confirmDialog({
+            title: 'Quitar producto',
+            message: `¿Quitar "${product?.name || ''}" de esta lista?`,
+            confirmText: 'Quitar',
+            danger: true,
+          });
+          if (confirmed) {
+            GroceryListItemRepository.remove(item.id);
+            showToast('Producto quitado de la lista');
+            render();
+          }
+        },
+      },
+    ]);
+    menu.classList.add('grocery-item-row__menu');
 
-    row.append(checkbox, nameSpan, qtyInput, unitSelect, estInput, actualInput, subtotalSpan, notesBtn, delBtn);
+    row.append(checkboxWrap, nameSpan, qtyWrap, estField, realField, subtotalWrap, menu);
     return row;
   }
 
@@ -432,13 +461,15 @@ export function renderGroceryListModule(container) {
         <label for="${formId}-category">Categoría</label>
         <select id="${formId}-category" name="categoryId">${categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</select>
       </div>
-      <div>
-        <label for="${formId}-quantity">Cantidad</label>
-        <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" value="1" required>
-      </div>
-      <div>
-        <label for="${formId}-unit">Unidad</label>
-        <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
+      <div class="form-row">
+        <div>
+          <label for="${formId}-quantity">Cantidad</label>
+          <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" value="1" required>
+        </div>
+        <div>
+          <label for="${formId}-unit">Unidad</label>
+          <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
+        </div>
       </div>
       <div>
         <label for="${formId}-price">Precio estimado por unidad (opcional)</label>

@@ -103,6 +103,8 @@ function updateLastSavedLabel() {
 function setupSidebarToggle() {
   const toggle = document.getElementById('sidebarToggle');
   const overlay = document.getElementById('sidebarOverlay');
+  // Mismo umbral que el drawer en css/responsive.css (mobile < 640px).
+  const desktopQuery = window.matchMedia('(min-width: 640px)');
 
   function setOpen(open) {
     document.body.classList.toggle('sidebar-open', open);
@@ -114,6 +116,14 @@ function setupSidebarToggle() {
     setOpen(!document.body.classList.contains('sidebar-open'));
   });
   overlay?.addEventListener('click', () => setOpen(false));
+
+  // Si el viewport crece a tablet/desktop mientras el drawer estaba abierto, se cierra.
+  // El CSS del drawer ya está scopeado a <640px (deja de tener efecto visual solo), pero
+  // sin esto la clase seguiría en el body y el drawer reaparecería "ya abierto" si el
+  // usuario volviera a angostar la ventana sin tocar antes el botón de menú.
+  desktopQuery.addEventListener('change', (event) => {
+    if (event.matches) setOpen(false);
+  });
 }
 
 function bootstrap() {

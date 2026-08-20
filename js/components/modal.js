@@ -1,12 +1,15 @@
 let activeModal = null;
 
-export function openModal({ title = '', content, footer, onClose } = {}) {
+// variant: 'form' (default) — formularios largos, casi pantalla completa en móvil.
+// 'compact' — confirmaciones/mensajes cortos (ver confirm-dialog.js): SIEMPRE centrado y
+// pequeño, nunca full-screen, incluso en móvil (ver css/responsive.css).
+export function openModal({ title = '', content, footer, onClose, variant = 'form' } = {}) {
   closeModal();
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" aria-label="${title}">
+    <div class="modal modal--${variant}" role="dialog" aria-modal="true" aria-label="${title}">
       <div class="modal-header">
         <h3 class="modal-title"></h3>
         <button type="button" class="modal-close" aria-label="Cerrar">&times;</button>

@@ -1,6 +1,7 @@
 import ExpenseRepository from './expense.repository.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import { renderTable } from '../../components/table.js';
+import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { openModal } from '../../components/modal.js';
 import { openCategoryManager } from '../../components/category-manager.js';
@@ -15,6 +16,7 @@ import { totalExpenses, expensesByCategory } from '../../services/financeService
 const categoryRepo = createCategoryRepository('expenseCategories');
 
 export function renderExpenseModule(container) {
+  ensureActionMenuOutsideClick();
   const view = { search: '', categoryFilter: 'all' };
   const root = document.createElement('div');
   root.className = 'module-view';
@@ -138,49 +140,67 @@ export function renderExpenseModule(container) {
       ],
       rows: expenses,
       rowActions: (row) => buildRowActions(row),
+      renderCard: (row, actions) => renderExpenseCard(row, actions),
     });
   }
 
   function buildRowActions(row) {
-    const wrap = document.createElement('div');
-    wrap.className = 'flex gap-xs';
-
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'btn btn--ghost';
-    editBtn.textContent = 'Editar';
-    editBtn.addEventListener('click', () => openExpenseForm(row));
-
-    const dupBtn = document.createElement('button');
-    dupBtn.type = 'button';
-    dupBtn.className = 'btn btn--ghost';
-    dupBtn.textContent = 'Duplicar';
-    dupBtn.addEventListener('click', () => {
-      ExpenseRepository.duplicate(row.id);
-      showToast('Gasto duplicado');
-      render();
-    });
-
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'btn btn--danger';
-    delBtn.textContent = 'Eliminar';
-    delBtn.addEventListener('click', async () => {
-      const confirmed = await confirmDialog({
-        title: 'Eliminar gasto',
-        message: `¿Eliminar "${escapeHtml(row.description)}"? Esta acción no se puede deshacer.`,
-        confirmText: 'Eliminar',
+    return createActionMenu(`Más acciones para ${row.description}`, [
+      { label: 'Editar', onClick: () => openExpenseForm(row) },
+      {
+        label: 'Duplicar',
+        onClick: () => {
+          ExpenseRepository.duplicate(row.id);
+          showToast('Gasto duplicado');
+          render();
+        },
+      },
+      {
+        label: 'Eliminar',
         danger: true,
-      });
-      if (confirmed) {
-        ExpenseRepository.remove(row.id);
-        showToast('Gasto eliminado');
-        render();
-      }
-    });
+        onClick: async () => {
+          const confirmed = await confirmDialog({
+            title: 'Eliminar gasto',
+            message: `¿Eliminar "${escapeHtml(row.description)}"? Esta acción no se puede deshacer.`,
+            confirmText: 'Eliminar',
+            danger: true,
+          });
+          if (confirmed) {
+            ExpenseRepository.remove(row.id);
+            showToast('Gasto eliminado');
+            render();
+          }
+        },
+      },
+    ]);
+  }
 
-    wrap.append(editBtn, dupBtn, delBtn);
-    return wrap;
+  function renderExpenseCard(row, actions) {
+    const card = document.createElement('div');
+    card.className = 'responsive-card-list__item';
+
+    const header = document.createElement('div');
+    header.className = 'responsive-card-list__header';
+    const title = document.createElement('span');
+    title.className = 'responsive-card-list__title';
+    title.textContent = row.description;
+    const amount = document.createElement('span');
+    amount.className = 'responsive-card-list__amount';
+    amount.textContent = formatMoney(row.amount);
+    header.append(title, amount);
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'responsive-card-list__subtitle';
+    subtitle.textContent = `${categoryName(row.categoryId)} · ${formatDateShort(row.date)}`;
+
+    const footer = document.createElement('div');
+    footer.className = 'responsive-card-list__body';
+    footer.style.flexDirection = 'row';
+    footer.style.justifyContent = 'flex-end';
+    footer.appendChild(actions);
+
+    card.append(header, subtitle, footer);
+    return card;
   }
 
   function openExpenseForm(existing) {
@@ -199,13 +219,15 @@ export function renderExpenseModule(container) {
         <label for="${formId}-description">Concepto</label>
         <input type="text" id="${formId}-description" name="description" required value="${escapeHtml(existing?.description || '')}">
       </div>
-      <div>
-        <label for="${formId}-amount">Cantidad</label>
-        <input type="number" id="${formId}-amount" name="amount" min="0" step="0.01" required value="${existing?.amount ?? ''}">
-      </div>
-      <div>
-        <label for="${formId}-date">Fecha</label>
-        <input type="date" id="${formId}-date" name="date" required value="${existing?.date ? existing.date.slice(0, 10) : toISODate(new Date())}">
+      <div class="form-row">
+        <div>
+          <label for="${formId}-amount">Cantidad</label>
+          <input type="number" id="${formId}-amount" name="amount" min="0" step="0.01" required value="${existing?.amount ?? ''}">
+        </div>
+        <div>
+          <label for="${formId}-date">Fecha</label>
+          <input type="date" id="${formId}-date" name="date" required value="${existing?.date ? existing.date.slice(0, 10) : toISODate(new Date())}">
+        </div>
       </div>
       <div>
         <label for="${formId}-category">Categoría</label>

@@ -109,12 +109,15 @@ export function renderCalendarModule(container) {
         iso === selectedDate ? 'calendar-day--selected' : '',
       ].filter(Boolean).join(' ');
       cell.setAttribute('aria-label', formatDateLong(cursor));
+      // El texto (emoji+conteo) vive en un <span> aparte para poder ocultarlo por CSS en
+      // móvil y dejar el badge como un punto de color compacto (ver css/responsive.css) —
+      // el detalle completo siempre está disponible en el panel del día seleccionado.
       cell.innerHTML = `
         <span class="calendar-day__number">${cursor.getDate()}</span>
         <span class="calendar-day__badges">
-          ${dayData.incomes.length ? `<span class="calendar-badge calendar-badge--income">💰${dayData.incomes.length}</span>` : ''}
-          ${dayData.expenses.length ? `<span class="calendar-badge calendar-badge--expense">🧾${dayData.expenses.length}</span>` : ''}
-          ${hasMandado ? '<span class="calendar-badge calendar-badge--mandado">🛒</span>' : ''}
+          ${dayData.incomes.length ? `<span class="calendar-badge calendar-badge--income"><span class="calendar-badge__label">💰${dayData.incomes.length}</span></span>` : ''}
+          ${dayData.expenses.length ? `<span class="calendar-badge calendar-badge--expense"><span class="calendar-badge__label">🧾${dayData.expenses.length}</span></span>` : ''}
+          ${hasMandado ? '<span class="calendar-badge calendar-badge--mandado"><span class="calendar-badge__label">🛒</span></span>' : ''}
         </span>
       `;
       cell.addEventListener('click', () => {

@@ -9,6 +9,7 @@ import PriceRepository from './price.repository.js';
 import { normalizePrice, formatNormalizedPrice, getUnitDimension } from '../../services/priceService.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { renderTable } from '../../components/table.js';
+import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { openModal } from '../../components/modal.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
@@ -24,6 +25,7 @@ function unitLabel(value) {
 }
 
 export function renderPriceHistoryModule(container) {
+  ensureActionMenuOutsideClick();
   let selectedProductId = null;
   let charts = [];
 
@@ -213,41 +215,82 @@ export function renderPriceHistoryModule(container) {
       ],
       rows: prices,
       rowActions: (row) => buildRowActions(row),
+      renderCard: (row, actions) => renderPriceCard(row, actions),
     }));
 
     return card;
   }
 
   function buildRowActions(row) {
-    const wrap = document.createElement('div');
-    wrap.className = 'flex gap-xs';
-
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'btn btn--ghost';
-    editBtn.textContent = 'Editar';
-    editBtn.addEventListener('click', () => openPriceForm(row));
-
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'btn btn--danger';
-    delBtn.textContent = 'Eliminar';
-    delBtn.addEventListener('click', async () => {
-      const confirmed = await confirmDialog({
-        title: 'Eliminar precio',
-        message: '¿Eliminar este registro de precio? Esta acción no se puede deshacer.',
-        confirmText: 'Eliminar',
+    return createActionMenu('Más acciones para este precio', [
+      { label: 'Editar', onClick: () => openPriceForm(row) },
+      {
+        label: 'Eliminar',
         danger: true,
-      });
-      if (confirmed) {
-        PriceRepository.remove(row.id);
-        showToast('Precio eliminado');
-        render();
-      }
-    });
+        onClick: async () => {
+          const confirmed = await confirmDialog({
+            title: 'Eliminar precio',
+            message: '¿Eliminar este registro de precio? Esta acción no se puede deshacer.',
+            confirmText: 'Eliminar',
+            danger: true,
+          });
+          if (confirmed) {
+            PriceRepository.remove(row.id);
+            showToast('Precio eliminado');
+            render();
+          }
+        },
+      },
+    ]);
+  }
 
-    wrap.append(editBtn, delBtn);
-    return wrap;
+  function renderPriceCard(row, actions) {
+    const product = ProductRepository.getById(row.productId);
+    const store = StoreRepository.getById(row.storeId);
+    const normalized = normalizePrice(row.price, row.quantity, row.unit);
+
+    const card = document.createElement('div');
+    card.className = 'responsive-card-list__item';
+
+    const header = document.createElement('div');
+    header.className = 'responsive-card-list__header';
+    const title = document.createElement('span');
+    title.className = 'responsive-card-list__title';
+    title.textContent = formatDateShort(row.date);
+    header.append(title, actions);
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'responsive-card-list__subtitle';
+    subtitle.textContent = store?.name || 'Tienda eliminada';
+
+    const body = document.createElement('div');
+    body.className = 'responsive-card-list__body';
+
+    const line1 = document.createElement('span');
+    line1.textContent = `${product?.name || 'Producto eliminado'} · ${row.quantity} ${unitLabel(row.unit)}`;
+
+    const line2 = document.createElement('span');
+    line2.className = 'responsive-card-list__amount';
+    line2.textContent = formatMoney(row.price);
+
+    body.append(line1, line2);
+
+    if (normalized) {
+      const line3 = document.createElement('span');
+      line3.className = 'text-muted';
+      line3.textContent = formatNormalizedPrice(normalized);
+      body.appendChild(line3);
+    }
+
+    if (row.notes) {
+      const notes = document.createElement('span');
+      notes.className = 'text-muted';
+      notes.textContent = row.notes;
+      body.appendChild(notes);
+    }
+
+    card.append(header, subtitle, body);
+    return card;
   }
 
   function openPriceForm(existing) {
@@ -273,21 +316,25 @@ export function renderPriceHistoryModule(container) {
         <label for="${formId}-store">Tienda</label>
         <select id="${formId}-store" name="storeId">${stores.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')}</select>
       </div>
-      <div>
-        <label for="${formId}-quantity">Cantidad (presentación)</label>
-        <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" required value="${existing?.quantity ?? 1}">
+      <div class="form-row">
+        <div>
+          <label for="${formId}-quantity">Cantidad (presentación)</label>
+          <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" required value="${existing?.quantity ?? 1}">
+        </div>
+        <div>
+          <label for="${formId}-unit">Unidad</label>
+          <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
+        </div>
       </div>
-      <div>
-        <label for="${formId}-unit">Unidad</label>
-        <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
-      </div>
-      <div>
-        <label for="${formId}-price">Precio</label>
-        <input type="number" id="${formId}-price" name="price" min="0" step="0.01" required value="${existing?.price ?? ''}">
-      </div>
-      <div>
-        <label for="${formId}-date">Fecha</label>
-        <input type="date" id="${formId}-date" name="date" required value="${existing?.date || toISODate(new Date())}">
+      <div class="form-row">
+        <div>
+          <label for="${formId}-price">Precio</label>
+          <input type="number" id="${formId}-price" name="price" min="0" step="0.01" required value="${existing?.price ?? ''}">
+        </div>
+        <div>
+          <label for="${formId}-date">Fecha</label>
+          <input type="date" id="${formId}-date" name="date" required value="${existing?.date || toISODate(new Date())}">
+        </div>
       </div>
       <div>
         <label for="${formId}-notes">Notas (opcional)</label>

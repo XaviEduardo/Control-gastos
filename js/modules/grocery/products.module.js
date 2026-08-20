@@ -1,6 +1,7 @@
 import ProductRepository from './product.repository.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import { renderTable } from '../../components/table.js';
+import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { openModal } from '../../components/modal.js';
 import { openCategoryManager } from '../../components/category-manager.js';
@@ -11,6 +12,7 @@ import { UNIT_OPTIONS } from './units.js';
 const categoryRepo = createCategoryRepository('groceryCategories');
 
 export function renderGroceryProductsModule(container) {
+  ensureActionMenuOutsideClick();
   const view = { search: '', categoryFilter: 'all' };
   const root = document.createElement('div');
   root.className = 'module-view';
@@ -103,31 +105,45 @@ export function renderGroceryProductsModule(container) {
       ],
       rows: products,
       rowActions: (row) => buildRowActions(row),
+      renderCard: (row, actions) => renderProductCard(row, actions),
     });
   }
 
   function buildRowActions(row) {
-    const wrap = document.createElement('div');
-    wrap.className = 'flex gap-xs';
+    return createActionMenu(`Más acciones para ${row.name}`, [
+      { label: 'Editar', onClick: () => openProductForm(row) },
+      {
+        label: row.status === 'active' ? 'Desactivar' : 'Activar',
+        onClick: () => {
+          ProductRepository.setStatus(row.id, row.status === 'active' ? 'inactive' : 'active');
+          showToast(row.status === 'active' ? 'Producto desactivado' : 'Producto activado');
+          render();
+        },
+      },
+    ]);
+  }
 
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'btn btn--ghost';
-    editBtn.textContent = 'Editar';
-    editBtn.addEventListener('click', () => openProductForm(row));
+  function renderProductCard(row, actions) {
+    const card = document.createElement('div');
+    card.className = 'responsive-card-list__item';
 
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = 'btn btn--ghost';
-    toggleBtn.textContent = row.status === 'active' ? 'Desactivar' : 'Activar';
-    toggleBtn.addEventListener('click', () => {
-      ProductRepository.setStatus(row.id, row.status === 'active' ? 'inactive' : 'active');
-      showToast(row.status === 'active' ? 'Producto desactivado' : 'Producto activado');
-      render();
-    });
+    const header = document.createElement('div');
+    header.className = 'responsive-card-list__header';
+    const title = document.createElement('span');
+    title.className = 'responsive-card-list__title';
+    title.textContent = row.name;
+    header.append(title, actions);
 
-    wrap.append(editBtn, toggleBtn);
-    return wrap;
+    const subtitle = document.createElement('div');
+    subtitle.className = 'responsive-card-list__subtitle';
+    subtitle.textContent = `${categoryName(row.categoryId)} · ${row.status === 'active' ? 'Activo' : 'Inactivo'}`;
+
+    const body = document.createElement('div');
+    body.className = 'responsive-card-list__body';
+    body.innerHTML = `<span>Unidad preferida: ${escapeHtml(unitLabel(row.preferredUnit))}</span>`;
+
+    card.append(header, subtitle, body);
+    return card;
   }
 
   function openProductForm(existing) {

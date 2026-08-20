@@ -113,7 +113,7 @@ export function renderReportsModule(container) {
     card.className = 'card mb-md';
 
     const toggle = document.createElement('div');
-    toggle.className = 'flex gap-sm mb-md';
+    toggle.className = 'flex flex-wrap gap-sm mb-md';
     Object.entries(PERIOD_LABELS).forEach(([type, label]) => {
       const btn = document.createElement('button');
       btn.type = 'button';
