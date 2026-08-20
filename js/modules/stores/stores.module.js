@@ -1,11 +1,13 @@
 import StoreRepository from './store.repository.js';
 import { renderTable } from '../../components/table.js';
+import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { openModal } from '../../components/modal.js';
 import { showToast } from '../../components/toast.js';
 import { isRequired, validate, escapeHtml } from '../../core/validators.js';
 
 export function renderStoresModule(container) {
+  ensureActionMenuOutsideClick();
   const view = { search: '' };
   const root = document.createElement('div');
   root.className = 'module-view';
@@ -77,31 +79,52 @@ export function renderStoresModule(container) {
       ],
       rows: stores,
       rowActions: (row) => buildRowActions(row),
+      renderCard: (row, actions) => renderStoreCard(row, actions),
     });
   }
 
   function buildRowActions(row) {
-    const wrap = document.createElement('div');
-    wrap.className = 'flex gap-xs';
+    return createActionMenu(`Más acciones para ${row.name}`, [
+      { label: 'Editar', onClick: () => openStoreForm(row) },
+      {
+        label: row.status === 'active' ? 'Desactivar' : 'Activar',
+        onClick: () => {
+          StoreRepository.setStatus(row.id, row.status === 'active' ? 'inactive' : 'active');
+          showToast(row.status === 'active' ? 'Tienda desactivada' : 'Tienda activada');
+          render();
+        },
+      },
+    ]);
+  }
 
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'btn btn--ghost';
-    editBtn.textContent = 'Editar';
-    editBtn.addEventListener('click', () => openStoreForm(row));
+  function renderStoreCard(row, actions) {
+    const card = document.createElement('div');
+    card.className = 'responsive-card-list__item';
 
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = 'btn btn--ghost';
-    toggleBtn.textContent = row.status === 'active' ? 'Desactivar' : 'Activar';
-    toggleBtn.addEventListener('click', () => {
-      StoreRepository.setStatus(row.id, row.status === 'active' ? 'inactive' : 'active');
-      showToast(row.status === 'active' ? 'Tienda desactivada' : 'Tienda activada');
-      render();
-    });
+    const header = document.createElement('div');
+    header.className = 'responsive-card-list__header';
+    const title = document.createElement('span');
+    title.className = 'responsive-card-list__title';
+    title.textContent = row.name;
+    header.append(title, actions);
 
-    wrap.append(editBtn, toggleBtn);
-    return wrap;
+    const subtitle = document.createElement('div');
+    subtitle.className = 'responsive-card-list__subtitle';
+    subtitle.textContent = `${row.location || 'Sin ubicación'} · ${row.status === 'active' ? 'Activa' : 'Inactiva'}`;
+
+    card.append(header, subtitle);
+
+    if (row.notes) {
+      const body = document.createElement('div');
+      body.className = 'responsive-card-list__body';
+      const note = document.createElement('span');
+      note.className = 'text-muted';
+      note.textContent = row.notes;
+      body.appendChild(note);
+      card.appendChild(body);
+    }
+
+    return card;
   }
 
   function openStoreForm(existing) {

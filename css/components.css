@@ -162,6 +162,22 @@
 .table-actions { display: flex; gap: var(--space-xs); }
 .table-empty { color: var(--color-text-muted); padding: var(--space-lg); text-align: center; }
 
+/* Vista de tarjetas para móvil (misma fuente de datos que .data-table, ver js/components/table.js
+   y el override <640px en css/responsive.css: solo una de las dos vistas es visible a la vez). */
+.responsive-card-list { display: none; flex-direction: column; gap: var(--space-sm); }
+.responsive-card-list__item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+}
+.responsive-card-list__header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-sm); }
+.responsive-card-list__title { font-weight: 600; font-size: var(--font-size-md); min-width: 0; overflow-wrap: anywhere; }
+.responsive-card-list__amount { font-size: var(--font-size-xl); font-weight: 700; white-space: nowrap; }
+.responsive-card-list__subtitle { color: var(--color-text-muted); font-size: var(--font-size-sm); margin-top: 2px; }
+.responsive-card-list__body { margin-top: var(--space-sm); display: flex; flex-direction: column; gap: 2px; font-size: var(--font-size-sm); }
+.responsive-card-list__body .text-muted { font-size: var(--font-size-xs); }
+
 .gap-xs { gap: var(--space-xs); }
 
 .toolbar {
@@ -199,7 +215,9 @@
   gap: var(--space-sm);
   padding: 8px 0;
   border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
 }
+.category-manager-item > span:last-child { flex-wrap: wrap; }
 
 .period-nav {
   display: flex;
@@ -280,22 +298,99 @@
 .calendar-badge--mandado { background: rgba(214, 158, 46, 0.2); }
 
 .grocery-item-list { display: flex; flex-direction: column; }
+
+/* Grid compartido por escritorio y móvil: mismo DOM, solo cambia grid-template-areas
+   (ver override < 640px en css/responsive.css). Evita duplicar markup/listeners por breakpoint. */
 .grocery-item-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 44px minmax(90px, 1fr) minmax(120px, auto) 100px 100px minmax(80px, auto) 44px;
+  grid-template-areas: "check name qty est real subtotal menu";
   align-items: center;
   gap: var(--space-sm);
-  padding: 8px 0;
+  padding: var(--space-sm) 0;
   border-bottom: 1px solid var(--color-border);
 }
 .grocery-item-row:last-child { border-bottom: none; }
-.grocery-item-row__name { flex: 1 1 140px; font-size: var(--font-size-sm); }
+
+.grocery-item-row__checkbox-wrap {
+  grid-area: check;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+}
+.grocery-item-row__checkbox-wrap input { width: 20px; height: 20px; }
+
+.grocery-item-row__name { grid-area: name; font-size: var(--font-size-sm); }
+
+.grocery-item-row__qty-wrap { grid-area: qty; display: flex; gap: var(--space-xs); min-width: 0; }
 .grocery-item-row__qty { width: 64px; }
-.grocery-item-row select { width: auto; min-width: 64px; }
-.grocery-item-row__price { width: 90px; }
-.grocery-item-row__subtotal { font-weight: 600; font-size: var(--font-size-sm); min-width: 70px; text-align: right; }
+.grocery-item-row__qty-wrap select { width: auto; min-width: 64px; }
+
+.grocery-item-row__field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.grocery-item-row__field--est { grid-area: est; }
+.grocery-item-row__field--real { grid-area: real; }
+.grocery-item-row__field-label { display: none; font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.grocery-item-row__price { width: 100%; }
+
+.grocery-item-row__subtotal-wrap { grid-area: subtotal; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.grocery-item-row__subtotal-label { display: none; font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.grocery-item-row__subtotal { font-weight: 600; font-size: var(--font-size-sm); text-align: right; }
+
 .grocery-item-row--purchased { opacity: 0.6; }
 .grocery-item-row--purchased .grocery-item-row__name { text-decoration: line-through; }
+
+.grocery-item-row__menu { grid-area: menu; display: flex; justify-content: flex-end; }
+
+/* Menú ⋮ de acciones secundarias (Mandado, tablas/tarjetas — ver docs/responsive-plan.md). */
+.action-menu { position: relative; }
+.action-menu__toggle {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text);
+}
+.action-menu__toggle:hover { background: var(--color-bg); }
+/* position:fixed (no absolute) con top/left calculados en JS (ver js/components/action-menu.js):
+   así el panel nunca queda recortado por un ancestro con overflow (ej. .data-table{overflow:hidden})
+   ni se sale del viewport — mismo comportamiento en desktop, iOS Safari y Android Chrome. */
+.action-menu__panel {
+  position: fixed;
+  z-index: 20;
+  min-width: 160px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.action-menu__panel.hidden { display: none; }
+.action-menu__item {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: 10px var(--space-sm);
+  border: none;
+  background: none;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.action-menu__item:hover { background: var(--color-bg); }
+.action-menu__item--danger { color: var(--color-danger); }
 
 .comparison-product-list { display: flex; flex-direction: column; gap: var(--space-sm); }
 .comparison-product-item {

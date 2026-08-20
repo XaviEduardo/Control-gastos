@@ -1,6 +1,7 @@
 import IncomeRepository from './income.repository.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import { renderTable } from '../../components/table.js';
+import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { openModal } from '../../components/modal.js';
 import { openCategoryManager } from '../../components/category-manager.js';
@@ -15,6 +16,7 @@ import { totalIncome, incomeByType } from '../../services/financeService.js';
 const incomeTypeRepo = createCategoryRepository('incomeTypes');
 
 export function renderIncomeModule(container) {
+  ensureActionMenuOutsideClick();
   const view = { search: '', typeFilter: 'all' };
   const root = document.createElement('div');
   root.className = 'module-view';
@@ -138,49 +140,67 @@ export function renderIncomeModule(container) {
       ],
       rows: incomes,
       rowActions: (row) => buildRowActions(row),
+      renderCard: (row, actions) => renderIncomeCard(row, actions),
     });
   }
 
   function buildRowActions(row) {
-    const wrap = document.createElement('div');
-    wrap.className = 'flex gap-xs';
-
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'btn btn--ghost';
-    editBtn.textContent = 'Editar';
-    editBtn.addEventListener('click', () => openIncomeForm(row));
-
-    const dupBtn = document.createElement('button');
-    dupBtn.type = 'button';
-    dupBtn.className = 'btn btn--ghost';
-    dupBtn.textContent = 'Duplicar';
-    dupBtn.addEventListener('click', () => {
-      IncomeRepository.duplicate(row.id);
-      showToast('Ingreso duplicado');
-      render();
-    });
-
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'btn btn--danger';
-    delBtn.textContent = 'Eliminar';
-    delBtn.addEventListener('click', async () => {
-      const confirmed = await confirmDialog({
-        title: 'Eliminar ingreso',
-        message: `¿Eliminar "${escapeHtml(row.description)}"? Esta acción no se puede deshacer.`,
-        confirmText: 'Eliminar',
+    return createActionMenu(`Más acciones para ${row.description}`, [
+      { label: 'Editar', onClick: () => openIncomeForm(row) },
+      {
+        label: 'Duplicar',
+        onClick: () => {
+          IncomeRepository.duplicate(row.id);
+          showToast('Ingreso duplicado');
+          render();
+        },
+      },
+      {
+        label: 'Eliminar',
         danger: true,
-      });
-      if (confirmed) {
-        IncomeRepository.remove(row.id);
-        showToast('Ingreso eliminado');
-        render();
-      }
-    });
+        onClick: async () => {
+          const confirmed = await confirmDialog({
+            title: 'Eliminar ingreso',
+            message: `¿Eliminar "${escapeHtml(row.description)}"? Esta acción no se puede deshacer.`,
+            confirmText: 'Eliminar',
+            danger: true,
+          });
+          if (confirmed) {
+            IncomeRepository.remove(row.id);
+            showToast('Ingreso eliminado');
+            render();
+          }
+        },
+      },
+    ]);
+  }
 
-    wrap.append(editBtn, dupBtn, delBtn);
-    return wrap;
+  function renderIncomeCard(row, actions) {
+    const card = document.createElement('div');
+    card.className = 'responsive-card-list__item';
+
+    const header = document.createElement('div');
+    header.className = 'responsive-card-list__header';
+    const title = document.createElement('span');
+    title.className = 'responsive-card-list__title';
+    title.textContent = row.description;
+    const amount = document.createElement('span');
+    amount.className = 'responsive-card-list__amount';
+    amount.textContent = formatMoney(row.amount);
+    header.append(title, amount);
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'responsive-card-list__subtitle';
+    subtitle.textContent = `${typeName(row.incomeTypeId)} · ${formatDateShort(row.date)}`;
+
+    const footer = document.createElement('div');
+    footer.className = 'responsive-card-list__body';
+    footer.style.flexDirection = 'row';
+    footer.style.justifyContent = 'flex-end';
+    footer.appendChild(actions);
+
+    card.append(header, subtitle, footer);
+    return card;
   }
 
   function openIncomeForm(existing) {

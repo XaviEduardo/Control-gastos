@@ -2,7 +2,13 @@ import { escapeHtml } from '../core/validators.js';
 
 // columns: [{ key, label, render?(row) }]. render() puede devolver HTML de confianza
 // (calculado por el módulo); las celdas por defecto se escapan automáticamente.
-export function renderTable({ columns, rows, emptyMessage = 'Sin datos todavía.', rowActions }) {
+//
+// renderCard(row, actionsNode) es opcional: si se pasa, renderTable() arma además una lista
+// de tarjetas (misma `rows`, sin estado ni fuente de datos duplicada) para mostrar en móvil
+// vía CSS (ver .responsive-card-list en css/components.css y su override en css/responsive.css).
+// `actionsNode` es el resultado de rowActions(row) para esa fila — el módulo decide dónde
+// colocarlo dentro de su propio layout de tarjeta (ver docs/responsive-plan.md).
+export function renderTable({ columns, rows, emptyMessage = 'Sin datos todavía.', rowActions, renderCard }) {
   const wrapper = document.createElement('div');
   wrapper.className = 'table-wrapper';
 
@@ -34,5 +40,16 @@ export function renderTable({ columns, rows, emptyMessage = 'Sin datos todavía.
 
   table.append(thead, tbody);
   wrapper.appendChild(table);
+
+  if (renderCard) {
+    const cardList = document.createElement('div');
+    cardList.className = 'responsive-card-list';
+    rows.forEach((row) => {
+      const actionsNode = rowActions ? rowActions(row) : null;
+      cardList.appendChild(renderCard(row, actionsNode));
+    });
+    wrapper.appendChild(cardList);
+  }
+
   return wrapper;
 }

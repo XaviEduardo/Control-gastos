@@ -7,11 +7,16 @@
 .sidebar {
   background: var(--color-sidebar-bg);
   color: var(--color-sidebar-text);
-  padding: var(--space-md) var(--space-sm);
+  /* min-height: 100vh como piso seguro (navegadores sin soporte de dvh); height: 100dvh
+     ajusta al viewport visual real cuando la barra del navegador móvil se oculta/muestra
+     (causa raíz del bug de scroll del sidebar diagnosticado en la auditoría). */
+  min-height: 100vh;
+  height: 100dvh;
+  padding: max(var(--space-md), env(safe-area-inset-top)) var(--space-sm) max(var(--space-md), env(safe-area-inset-bottom)) var(--space-sm);
   position: sticky;
   top: 0;
-  height: 100vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sidebar__brand {
@@ -59,11 +64,11 @@
 }
 
 .app-header {
-  height: var(--header-height);
+  min-height: var(--header-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--space-lg);
+  padding: env(safe-area-inset-top) var(--space-lg) 0 var(--space-lg);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
@@ -82,8 +87,8 @@
 .sidebar-toggle {
   display: none;
   position: fixed;
-  top: 14px;
-  left: 14px;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
   z-index: 40;
   width: 40px;
   height: 40px;

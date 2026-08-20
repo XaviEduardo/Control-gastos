@@ -2,7 +2,11 @@
   :root { --sidebar-width: 220px; }
 }
 
-@media (max-width: 768px) {
+/* Mobile (< 640px, estrategia documentada en docs/responsive-plan.md): sidebar = drawer.
+   Todas las reglas que dependen de body.sidebar-open viven DENTRO de este media query a
+   propósito: si el viewport cruza a tablet/desktop mientras el drawer está "abierto" en el
+   DOM, deja de tener efecto visual automáticamente (sin necesitar JS que limpie la clase). */
+@media (max-width: 639px) {
   .app-shell { grid-template-columns: 1fr; }
 
   .sidebar {
@@ -16,16 +20,46 @@
     box-shadow: var(--shadow-md);
   }
 
+  /* Scroll-lock: bloquea el scroll del contenido detrás del overlay mientras el drawer
+     está abierto. El propio sidebar conserva su overflow-y:auto (scroll interno normal). */
+  body.sidebar-open { overflow: hidden; }
   body.sidebar-open .sidebar { transform: translateX(0); }
   body.sidebar-open .sidebar-overlay { display: block; }
 
   .sidebar-toggle { display: flex; }
   .app-header { padding-left: 64px; }
+
+  /* Mandado > Mi lista: mismo DOM de .grocery-item-row (ver css/components.css), solo
+     cambia el template a una tarjeta apilada. Las etiquetas Est./Real/Subtotal (ocultas
+     en escritorio) se muestran aquí porque ya no hay una fila densa que dé contexto visual. */
+  .grocery-item-row {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-areas:
+      "check name name menu"
+      "qty qty qty qty"
+      "est est real real"
+      "subtotal subtotal subtotal subtotal";
+    row-gap: var(--space-xs);
+    padding: var(--space-md) 0;
+  }
+  .grocery-item-row__field-label,
+  .grocery-item-row__subtotal-label { display: block; }
+  .grocery-item-row__subtotal-wrap { flex-direction: row; justify-content: space-between; align-items: baseline; }
+
+  /* Tabla → tarjetas (Productos, Tiendas, Historial de precios, Ingresos, Gastos). Misma
+     fuente de datos (ver js/components/table.js): aquí solo se alterna qué vista es visible. */
+  .table-wrapper .data-table { display: none; }
+  .responsive-card-list { display: flex; }
+
+  .category-manager-item { padding: var(--space-md) 0; }
+  .category-manager-item > span:last-child { gap: var(--space-sm); }
 }
 
 @media (max-width: 480px) {
   .app-content { padding: var(--space-md); }
-  .app-header { padding: 0 var(--space-md) 0 60px; }
+  /* Longhand (no shorthand) a propósito: no debe pisar el padding-top con safe-area
+     que define la regla base de .app-header en css/layout.css. */
+  .app-header { padding-right: var(--space-md); padding-left: 60px; }
   .empty-state { margin: var(--space-lg) auto; padding: var(--space-lg); }
 
   .calendar-grid { gap: 2px; }
