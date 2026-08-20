@@ -2,6 +2,17 @@
 
 Estado: `pendiente` | `en progreso` | `hecho`
 
+## Rediseño visual global "Minimal Finance" — **en progreso**
+Nuevo Design System (tokens en `css/variables.css`: primary índigo, superficies off-white,
+tipografía ampliada, radios/sombras más suaves) + iconografía SVG propia (`js/components/
+icons.js`, reemplaza el emoji) + sidebar rediseñado (claro, antes oscuro). Aplicado hasta
+ahora: **PASS 1 (Foundation)** y **PASS 2 (Dashboard + Mandado)**. Referencias visuales en
+`docs/dashboard-desktop.png`, `docs/dashboard-mobile.png`, `docs/grocery-mobile.png` — solo
+inspiración de lenguaje visual, nunca copiadas literalmente (ver reporte de la fase para el
+detalle completo de qué se preservó/reorganizó/agregó). Pendiente: PASS 3 (Finanzas) — PASS 4
+(Mandado completo: Productos/Categorías/Tiendas/Precios/Historial/Comparador) — PASS 5
+(Calendario/Reportes/Configuración) — PASS 6 (QA). No continuar sin autorización explícita.
+
 ## Fase 0 — Investigación — **hecho**
 - Inspeccionar Excel, documentar en `excel-analysis.md`.
 - Definir modelo de datos (`data-model.md`) y arquitectura (`architecture.md`).

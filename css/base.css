@@ -16,6 +16,10 @@ button { font-family: inherit; cursor: pointer; }
 ul, ol { margin: 0; padding: 0; list-style: none; }
 img, svg { max-width: 100%; display: block; }
 
+/* Iconos lineales inline (ver js/components/icons.js) — display:block evita el hueco de
+ * espacio en blanco que un <svg> inline arrastra por su baseline por defecto. */
+.icon { display: block; flex-shrink: 0; }
+
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
@@ -35,6 +39,10 @@ input, select, textarea {
   width: 100%;
   transition: border-color var(--transition-fast);
 }
+
+/* Checkbox con el color de marca en estado marcado (nativo, sin reconstruirlo con SVG/JS —
+ * ver rediseño "Minimal Finance"). Soporte amplio en navegadores modernos. */
+input[type="checkbox"] { accent-color: var(--color-primary); }
 
 input:disabled, select:disabled, textarea:disabled {
   background: var(--color-bg);
@@ -81,17 +89,19 @@ label {
 
 .btn--primary { background: var(--color-primary); color: #fff; }
 .btn--primary:hover { background: var(--color-primary-hover); }
+.btn--secondary { background: var(--color-primary-soft); color: var(--color-primary); }
+.btn--secondary:hover { background: var(--color-border); }
 .btn--ghost { background: transparent; border-color: var(--color-border); color: var(--color-text); }
 .btn--ghost:hover { background: var(--color-bg); }
 .btn--danger { background: var(--color-danger); color: #fff; }
 .btn--danger:hover { background: #b83a3a; }
 
-/* Botón cuadrado para acciones compactas sin texto (⋮, editar, eliminar, cerrar). Combinar
- * con una variante de color (btn--ghost/btn--danger/etc.), ej. class="btn btn--icon btn--ghost".
- * Fases futuras lo aplican donde corresponda; aquí solo se deja el patrón definido. */
+/* Botón cuadrado para acciones compactas sin texto (editar, eliminar, cerrar). Combinar con
+ * una variante de color (btn--ghost/btn--danger/etc.), ej. class="btn btn--icon btn--ghost".
+ * 44px (antes 40px): mismo objetivo táctil que .modal-close/.action-menu__toggle. */
 .btn--icon {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   gap: 0;
   font-size: var(--font-size-lg);

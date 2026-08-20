@@ -7,6 +7,7 @@
 .sidebar {
   background: var(--color-sidebar-bg);
   color: var(--color-sidebar-text);
+  border-right: 1px solid var(--color-border);
   /* min-height: 100vh como piso seguro (navegadores sin soporte de dvh); height: 100dvh
      ajusta al viewport visual real cuando la barra del navegador móvil se oculta/muestra
      (causa raíz del bug de scroll del sidebar diagnosticado en la auditoría). */
@@ -26,14 +27,15 @@
   padding: var(--space-sm) var(--space-sm) var(--space-lg);
   font-weight: 700;
   font-size: var(--font-size-lg);
-  color: #fff;
+  color: var(--color-text);
 }
+.sidebar__brand .icon { color: var(--color-primary); }
 
 .sidebar__group-title {
   text-transform: uppercase;
   font-size: 0.7rem;
   letter-spacing: 0.05em;
-  color: rgba(201, 211, 232, 0.6);
+  color: var(--color-text-muted);
   margin: var(--space-md) var(--space-sm) var(--space-xs);
 }
 
@@ -45,9 +47,10 @@
   border-radius: var(--radius-sm);
   font-size: var(--font-size-md);
   margin-bottom: 2px;
+  color: var(--color-sidebar-text);
 }
 
-.sidebar__link:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.sidebar__link:hover { background: var(--color-primary-soft); color: var(--color-primary); }
 
 .sidebar__link--active {
   background: var(--color-sidebar-active-bg);
@@ -55,7 +58,9 @@
   font-weight: 600;
 }
 
-.sidebar__icon { width: 20px; text-align: center; }
+/* El SVG hereda el color vía stroke="currentColor" (ver js/components/icons.js) — no necesita
+   color propio, sigue automáticamente al estado hover/activo del enlace que lo contiene. */
+.sidebar__icon { display: flex; }
 
 .app-main {
   display: flex;

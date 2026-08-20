@@ -16,11 +16,24 @@
       "est est real real"
       "subtotal subtotal subtotal subtotal";
     row-gap: var(--space-xs);
-    padding: var(--space-md) 0;
+    padding: var(--space-md);
   }
   .grocery-item-row__field-label,
   .grocery-item-row__subtotal-label { display: block; }
   .grocery-item-row__subtotal-wrap { flex-direction: row; justify-content: space-between; align-items: baseline; }
+
+  /* Rediseño "Minimal Finance": en vez de "categoría = caja que contiene filas separadas por
+     borde", cada producto pasa a ser su propia tarjeta suelta y la categoría queda como
+     encabezado simple sobre la pila — evita el look de "tarjetas dentro de una tarjeta". */
+  .mandado-category { background: none; border: none; box-shadow: none; padding: 0; }
+  .grocery-item-list { gap: var(--space-sm); }
+  .grocery-item-row,
+  .grocery-item-row:last-child {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
 }
 
 /* Mobile (< 640px, estrategia documentada en docs/responsive-plan.md): sidebar = drawer.

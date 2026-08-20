@@ -1,40 +1,44 @@
 :root {
-  /* ---------- Brand ---------- */
-  --color-primary: #2f6fed;
-  --color-primary-hover: #1f52c2;
-  --color-primary-soft: #e8f0fe;
+  /* ---------- Brand — Deep Indigo (rediseño "Minimal Finance", ver docs/ui-ux-audit.md) ---------- */
+  --color-primary: #4F46E5;
+  --color-primary-hover: #4338CA;
+  --color-primary-soft: #EEF2FF;
+  /* Superficie "hero" (ej. tarjeta de Balance) — deliberadamente distinta de --color-primary
+     para que un bloque sólido no compita visualmente con botones/enlaces. */
+  --color-primary-strong: #1E1B4B;
 
   /* ---------- Surfaces ---------- */
-  --color-bg: #f4f6fa;
+  --color-bg: #F6F7FB;
   --color-surface: #ffffff;
-  --color-surface-secondary: #f9fafc;
-  --color-border: #e2e5ec;
+  --color-surface-secondary: #F1F2F8;
+  --color-border: #E5E7F0;
 
   /* ---------- Text ---------- */
-  --color-text: #1f2430;
-  --color-text-secondary: #4b5468;
-  --color-text-muted: #6b7280;
+  --color-text: #15161F;
+  --color-text-secondary: #4B4F63;
+  --color-text-muted: #7A7E93;
 
   /* ---------- Semantic (par sólido + suave: sólido = texto/ícono, suave = fondo) ---------- */
-  --color-success: #1f9d55;
-  --color-success-soft: #e5f6ec;
-  --color-warning: #d69e2e;
-  --color-warning-soft: #fbf1e0;
-  --color-danger: #d64545;
-  --color-danger-soft: #fbe9e9;
-  --color-info: #2f6fed;
-  --color-info-soft: #e8f0fe;
+  --color-success: #17A567;
+  --color-success-soft: #E6F7EE;
+  --color-warning: #C98A1E;
+  --color-warning-soft: #FBF0DD;
+  --color-danger: #DC4949;
+  --color-danger-soft: #FBEAEA;
+  --color-info: #4F46E5;
+  --color-info-soft: #EEF2FF;
 
-  /* ---------- Sidebar (namespace propio, no forma parte de la paleta general) ---------- */
-  --color-sidebar-bg: #14213d;
-  --color-sidebar-text: #c9d3e8;
-  --color-sidebar-text-active: #ffffff;
-  --color-sidebar-active-bg: #1f2f52;
+  /* ---------- Sidebar — ahora parte de la familia "surface" (claro), no un namespace oscuro
+     aparte (antes #14213d). Mismo look que el resto de la app, con el primary como acento. ---------- */
+  --color-sidebar-bg: var(--color-surface);
+  --color-sidebar-text: var(--color-text-secondary);
+  --color-sidebar-text-active: var(--color-primary);
+  --color-sidebar-active-bg: var(--color-primary-soft);
 
-  /* ---------- Radius ---------- */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  /* ---------- Radius (más redondeado que antes: 6/10/16 → 8/14/20, look más "premium") ---------- */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
 
   /* ---------- Spacing ---------- */
   --space-xs: 4px;
@@ -44,14 +48,26 @@
   --space-xl: 32px;
   --space-2xl: 40px;
 
-  /* ---------- Typography ---------- */
+  /* ---------- Typography ----------
+     Familia sin cambios (ya es una pila moderna sin dependencia externa — Segoe UI/-apple-
+     system/Roboto ya se leen como "Inter-like" en cada plataforma, ver docs/ui-ux-audit.md).
+     Escala ampliada con nombres semánticos (display/kpi/page-title/...) sin tocar los tokens
+     xs..2xl existentes — evita romper ningún módulo que ya los use. */
   --font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
-  --font-size-xs: 0.6875rem;   /* metadatos/eyebrow */
+  --font-size-xs: 0.6875rem;   /* metadatos/eyebrow/caption */
   --font-size-sm: 0.8125rem;   /* body secundario, labels */
   --font-size-md: 0.9375rem;   /* body */
   --font-size-lg: 1.125rem;    /* card title / section title */
   --font-size-xl: 1.5rem;      /* page title */
   --font-size-2xl: 1.875rem;   /* KPI value */
+
+  --font-size-caption: var(--font-size-xs);
+  --font-size-label: var(--font-size-sm);
+  --font-size-card-title: var(--font-size-lg);
+  --font-size-section-title: 1.25rem;
+  --font-size-page-title: var(--font-size-xl);
+  --font-size-kpi: var(--font-size-2xl);
+  --font-size-display: 2.25rem;
 
   --font-weight-medium: 600;
   --font-weight-bold: 700;
@@ -59,9 +75,10 @@
   --line-height-tight: 1.25;
   --line-height-normal: 1.5;
 
-  /* ---------- Shadows (sin sombras grandes/glassmorphism) ---------- */
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  /* ---------- Shadows (suaves, con tinte índigo en vez de negro puro — "controlled calm",
+     no glassmorphism ni sombras grandes) ---------- */
+  --shadow-sm: 0 1px 3px rgba(30, 27, 75, 0.06);
+  --shadow-md: 0 8px 24px rgba(30, 27, 75, 0.10);
 
   /* ---------- Layout ---------- */
   --sidebar-width: 260px;

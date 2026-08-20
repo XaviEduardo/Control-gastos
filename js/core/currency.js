@@ -26,3 +26,17 @@ export function formatDelta(current, previous, label = 'vs periodo anterior') {
   const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '→';
   return `${arrow} ${Math.abs(pct)}% ${label}`;
 }
+
+/** Igual cálculo que formatDelta, pero en partes separadas para poder colorear el signo
+ * (ver KPI cards del rediseño) sin tener que parsear el string de formatDelta. No usado por
+ * los módulos que ya consumen formatDelta (monthly.module.js) — no se les toca. */
+export function formatDeltaParts(current, previous) {
+  if (previous === 0) {
+    return current === 0
+      ? { text: 'Sin cambio', direction: 'flat' }
+      : { text: 'Nuevo', direction: 'new' };
+  }
+  const pct = Math.round(((current - previous) / Math.abs(previous)) * 100);
+  const direction = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+  return { text: `${Math.abs(pct)}%`, direction, pct };
+}

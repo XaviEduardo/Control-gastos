@@ -15,17 +15,17 @@
 .card-title { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--color-text); }
 
 /* ---------- Badges de ESTADO vs. tags de METADATO (no deben verse igual) ----------
-   Badge: pill, uppercase, color semántico — para Activo/Inactivo/Completado/Pendiente/etc.
-   Tag: rectangular pequeño, sin uppercase, tono neutro — para datos como "Lácteos"/"1.5 L". */
+   Badge: pill, color semántico — para Activo/Inactivo/Completado/Pendiente/etc.
+   Tag: rectangular pequeño, tono neutro — para datos como "Lácteos"/"1.5 L".
+   Rediseño "Minimal Finance": antes uppercase+bold (look "sistema administrativo"); ahora
+   case normal + peso medio, más calmado (ver docs/ui-ux-audit.md, dirección "controlled calm"). */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  padding: 3px 9px;
+  font-weight: var(--font-weight-medium);
+  padding: 3px 10px;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -231,6 +231,9 @@
 }
 .summary-card__value { font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); margin-top: 4px; color: var(--color-text); }
 
+.dashboard-header__eyebrow { color: var(--color-text-muted); font-size: var(--font-size-md); }
+.dashboard-header__title { font-size: var(--font-size-display); font-weight: var(--font-weight-bold); color: var(--color-text); margin-top: 2px; }
+
 .breakdown-list { display: flex; flex-direction: column; gap: 6px; }
 .breakdown-list li { display: flex; justify-content: space-between; font-size: var(--font-size-sm); }
 
@@ -279,12 +282,117 @@
   gap: var(--space-md);
 }
 
-.stat-card--negative .summary-card__value { color: var(--color-danger); }
-.stat-card--positive .summary-card__value { color: var(--color-success); }
+.stat-card--negative .kpi-card__value { color: var(--color-danger); }
+.stat-card--positive .kpi-card__value { color: var(--color-success); }
+
+/* ---------- KPI card (rediseño "Minimal Finance" — ver js/components/stat-card.js) ----------
+   Reemplaza la composición label+value plana de .summary-card por: label + chip de icono,
+   valor grande, variación coloreada opcional. Usado por Dashboard/Reportes/Presupuesto/
+   Mandado (renderStatCard es un componente compartido — todo consumidor se beneficia). */
+.kpi-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+}
+.kpi-card__header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-sm); }
+.kpi-card__label { color: var(--color-text-secondary); font-size: var(--font-size-label); font-weight: var(--font-weight-medium); }
+.kpi-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+.kpi-card__icon--danger { background: var(--color-danger-soft); color: var(--color-danger); }
+.kpi-card__icon--success { background: var(--color-success-soft); color: var(--color-success); }
+.kpi-card__value {
+  font-size: var(--font-size-kpi);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin-top: var(--space-sm);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.kpi-card__delta { display: inline-flex; align-items: center; gap: 4px; font-size: var(--font-size-sm); margin-top: var(--space-xs); color: var(--color-text-muted); }
+.kpi-card__delta--up { color: var(--color-success); }
+.kpi-card__delta--down { color: var(--color-danger); }
+
+/* Variante "hero" (Balance en Dashboard): superficie sólida en vez de blanca, para que el
+   número más importante de la pantalla destaque sin depender solo del tamaño de fuente. */
+.kpi-card--hero { background: var(--color-primary-strong); border-color: var(--color-primary-strong); }
+.kpi-card--hero .kpi-card__label { color: rgba(255, 255, 255, 0.7); }
+.kpi-card--hero .kpi-card__value { color: #fff; }
+.kpi-card--hero .kpi-card__icon { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.kpi-card--hero .kpi-card__delta { color: rgba(255, 255, 255, 0.85); }
+.kpi-card--hero .kpi-card__delta--up, .kpi-card--hero .kpi-card__delta--down { color: #fff; }
+
+/* ---------- Tarjeta de progreso (Presupuesto/Mandado en Dashboard) ---------- */
+.progress-summary-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-lg); }
+.progress-summary-card__header { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.progress-summary-card__title { font-weight: var(--font-weight-bold); font-size: var(--font-size-card-title); }
+.progress-summary-card__value-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-sm); gap: var(--space-sm); }
+.progress-summary-card__value { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); }
+.progress-summary-card__caption { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.progress-summary-card__footnote { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: var(--space-sm); }
+
+/* ---------- Lista de próximos movimientos (Dashboard) — misma composición visual que se
+   reutilizará para listas de movimientos en otras pantallas en fases futuras. ---------- */
+.movement-list { display: flex; flex-direction: column; }
+.movement-row { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-sm) 0; border-bottom: 1px solid var(--color-border); }
+.movement-row:last-child { border-bottom: none; }
+.movement-row__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+}
+.movement-row__icon--income { background: var(--color-success-soft); color: var(--color-success); }
+.movement-row__icon--expense { background: var(--color-danger-soft); color: var(--color-danger); }
+.movement-row__body { flex: 1 1 auto; min-width: 0; }
+.movement-row__title { font-weight: var(--font-weight-medium); font-size: var(--font-size-md); overflow-wrap: anywhere; }
+.movement-row__subtitle { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: 2px; }
+.movement-row__amount { font-weight: var(--font-weight-bold); font-size: var(--font-size-md); white-space: nowrap; }
+.movement-row__amount--income { color: var(--color-success); }
 
 .progress-bar { background: var(--color-bg); border-radius: 999px; height: 10px; overflow: hidden; }
 .progress-bar__fill { height: 100%; background: var(--color-primary); }
 .progress-bar__fill--over { background: var(--color-danger); }
+
+/* ---------- Mandado: tarjeta de resumen de la lista (rediseño "Minimal Finance") ----------
+   Reemplaza las 4 stat-cards sueltas (Total estimado/Total real/Progreso/Excedido) por una
+   sola tarjeta consolidada — mismos datos de listTotals(), solo reorganizados. */
+.mandado-summary__header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-md); flex-wrap: wrap; }
+.mandado-summary__title { display: flex; align-items: flex-start; gap: var(--space-sm); }
+.mandado-summary__amount { text-align: right; }
+.mandado-summary__amount-value { font-size: var(--font-size-kpi); font-weight: var(--font-weight-bold); }
+.mandado-summary__amount-caption { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.mandado-summary__footrow { display: flex; justify-content: space-between; gap: var(--space-sm); font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: var(--space-sm); flex-wrap: wrap; }
+
+/* ---------- Mandado: grupo por categoría ----------
+   .mandado-category es una .card solo en escritorio (ver override <1024px en
+   css/responsive.css, donde cada .grocery-item-row pasa a ser su propia tarjeta suelta). */
+.mandado-category {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+}
+.mandado-category__header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); flex-wrap: wrap; }
+.mandado-category__title { display: flex; align-items: center; gap: var(--space-sm); }
+.mandado-category__bar { width: 4px; height: 18px; border-radius: 2px; background: var(--color-primary); flex-shrink: 0; }
+.mandado-category__total { font-weight: var(--font-weight-bold); }
 
 .comparison-list { display: flex; flex-direction: column; gap: var(--space-sm); }
 .comparison-list li { display: flex; justify-content: space-between; gap: var(--space-sm); font-size: var(--font-size-sm); }
@@ -324,7 +432,10 @@
 .calendar-day:hover { border-color: var(--color-primary); }
 .calendar-day--outside { color: var(--color-text-muted); background: var(--color-bg); }
 .calendar-day--today { border-color: var(--color-primary); border-width: 2px; }
-.calendar-day--selected { background: var(--color-sidebar-active-bg); color: #fff; border-color: var(--color-sidebar-active-bg); }
+/* var(--color-primary) directo, no var(--color-sidebar-active-bg): ese token ahora es un
+   tinte claro (sidebar rediseñado, ver css/variables.css) — reusarlo aquí dejaría texto
+   blanco sobre fondo claro, ilegible. El día seleccionado necesita su propio fondo sólido. */
+.calendar-day--selected { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 .calendar-day--selected .calendar-day__number { color: #fff; }
 
 .calendar-day__number { font-size: var(--font-size-sm); font-weight: 600; }
