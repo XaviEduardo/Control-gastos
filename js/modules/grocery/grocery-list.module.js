@@ -482,28 +482,30 @@ export function renderGroceryListModule(container) {
   }
 
   function openItemForm(list) {
-    const categories = groceryCategoryRepo.list({ includeInactive: false });
-    if (!categories.length) {
-      showToast('Primero agrega una categoría de mandado.', { type: 'error' });
+    // Solo productos ya existentes (ver docs/decisions.md): registrar un producto nuevo es
+    // responsabilidad exclusiva de Mandado > Productos, no de este modal — evita catálogos
+    // duplicados/inconsistentes creados "al vuelo" desde una lista.
+    const products = ProductRepository.list({ includeInactive: false }).sort((a, b) => a.name.localeCompare(b.name));
+    if (!products.length) {
+      showToast('Primero agrega productos en Mandado > Productos.', { type: 'error' });
       return;
     }
-
-    const products = ProductRepository.list({ includeInactive: false });
+    const categories = groceryCategoryRepo.list({ includeInactive: false });
     const formId = `grocery-item-form-${Date.now()}`;
-    const datalistId = `${formId}-products`;
 
     const form = document.createElement('form');
     form.id = formId;
     form.className = 'form-grid';
     form.innerHTML = `
       <div>
-        <label for="${formId}-name">Producto</label>
-        <input type="text" id="${formId}-name" name="name" list="${datalistId}" required autocomplete="off" placeholder="Ej. Tomate">
-        <datalist id="${datalistId}">${products.map((p) => `<option value="${escapeHtml(p.name)}"></option>`).join('')}</datalist>
+        <label for="${formId}-product">Producto</label>
+        <select id="${formId}-product" name="productId">
+          ${products.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+        </select>
       </div>
       <div>
         <label for="${formId}-category">Categoría</label>
-        <select id="${formId}-category" name="categoryId">${categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</select>
+        <select id="${formId}-category" name="categoryId" disabled>${categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</select>
       </div>
       <div class="form-row">
         <div>
@@ -526,16 +528,21 @@ export function renderGroceryListModule(container) {
       <p class="form-error hidden"></p>
     `;
 
-    const nameInput = form.querySelector(`#${formId}-name`);
+    const productSelect = form.querySelector(`#${formId}-product`);
     const categorySelect = form.querySelector(`#${formId}-category`);
     const unitSelect = form.querySelector(`#${formId}-unit`);
-    nameInput.addEventListener('input', () => {
-      const match = ProductRepository.findByName(nameInput.value, { includeInactive: false });
-      if (match) {
-        categorySelect.value = match.categoryId;
-        unitSelect.value = match.preferredUnit;
-      }
-    });
+
+    // Categoría deja de ser una elección manual: es pura referencia, siempre la del producto
+    // seleccionado (obtenida directamente del catálogo ya existente) — por eso el <select>
+    // está disabled y solo se sincroniza por código, nunca por el usuario.
+    function syncProductFields() {
+      const selected = ProductRepository.getById(productSelect.value);
+      if (!selected) return;
+      categorySelect.value = selected.categoryId;
+      unitSelect.value = selected.preferredUnit;
+    }
+    productSelect.addEventListener('change', syncProductFields);
+    syncProductFields();
 
     const footer = document.createElement('div');
     const cancelBtn = document.createElement('button');
@@ -555,15 +562,14 @@ export function renderGroceryListModule(container) {
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       const data = new FormData(form);
-      const name = data.get('name');
-      const categoryId = data.get('categoryId');
+      const productId = data.get('productId');
       const quantity = data.get('quantity');
       const unit = data.get('unit');
       const estimatedPrice = data.get('estimatedPrice');
       const notes = data.get('notes');
 
       const { valid, errors } = validate([
-        { valid: isRequired(name), message: 'El nombre del producto es obligatorio.' },
+        { valid: isRequired(productId), message: 'Selecciona un producto.' },
         { valid: isPositiveNumber(quantity), message: 'La cantidad debe ser mayor a 0.' },
       ]);
       const errorEl = form.querySelector('.form-error');
@@ -574,10 +580,7 @@ export function renderGroceryListModule(container) {
       }
       errorEl.classList.add('hidden');
 
-      let product = ProductRepository.findByName(name, { includeInactive: false });
-      if (!product) {
-        product = ProductRepository.create({ name, categoryId, preferredUnit: unit });
-      }
+      const product = ProductRepository.getById(productId);
 
       GroceryListItemRepository.create({
         groceryListId: list.id,
