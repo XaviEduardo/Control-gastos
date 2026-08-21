@@ -7,13 +7,15 @@ import { renderMonthYearNav } from '../../components/month-year-nav.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
+import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
+import { iconMarkup } from '../../components/icons.js';
 import { openMovementForm } from '../shared/movement-form.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import IncomeRepository from '../income/income.repository.js';
 import ExpenseRepository from '../expenses/expense.repository.js';
 import { formatMoney } from '../../core/currency.js';
 import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek, toISODate, formatDateLong,
+  MONTH_NAMES, startOfMonth, endOfMonth, startOfWeek, endOfWeek, toISODate, formatDateLong,
 } from '../../core/dates.js';
 import { getOccurrencesInRange, frequencyLabel } from '../../services/recurrenceService.js';
 import { escapeHtml } from '../../core/validators.js';
@@ -23,6 +25,7 @@ const incomeTypeRepo = createCategoryRepository('incomeTypes');
 const expenseCategoryRepo = createCategoryRepository('expenseCategories');
 
 export function renderCalendarModule(container) {
+  ensureActionMenuOutsideClick();
   const settings = State.getSettings();
   const now = new Date();
   let year = settings.selectedYear ?? now.getFullYear();
@@ -56,9 +59,20 @@ export function renderCalendarModule(container) {
     return map;
   }
 
+  function renderHeader() {
+    const wrap = document.createElement('div');
+    wrap.className = 'dashboard-header mb-md';
+    wrap.innerHTML = `
+      <div class="dashboard-header__eyebrow">Calendario</div>
+      <h2 class="dashboard-header__title">${MONTH_NAMES[month]} ${year}</h2>
+    `;
+    return wrap;
+  }
+
   function render() {
     root.innerHTML = '';
 
+    root.appendChild(renderHeader());
     root.appendChild(renderMonthYearNav({
       month,
       year,
@@ -109,15 +123,17 @@ export function renderCalendarModule(container) {
         iso === selectedDate ? 'calendar-day--selected' : '',
       ].filter(Boolean).join(' ');
       cell.setAttribute('aria-label', formatDateLong(cursor));
-      // El texto (emoji+conteo) vive en un <span> aparte para poder ocultarlo por CSS en
+      // El texto (icono SVG+conteo) vive en un <span> aparte para poder ocultarlo por CSS en
       // móvil y dejar el badge como un punto de color compacto (ver css/responsive.css) —
       // el detalle completo siempre está disponible en el panel del día seleccionado.
+      // Iconos en vez de emoji (ver rediseño "Minimal Finance") — mismo lenguaje que
+      // .movement-row__icon en Dashboard/Ingresos/Gastos.
       cell.innerHTML = `
         <span class="calendar-day__number">${cursor.getDate()}</span>
         <span class="calendar-day__badges">
-          ${dayData.incomes.length ? `<span class="calendar-badge calendar-badge--income"><span class="calendar-badge__label">💰${dayData.incomes.length}</span></span>` : ''}
-          ${dayData.expenses.length ? `<span class="calendar-badge calendar-badge--expense"><span class="calendar-badge__label">🧾${dayData.expenses.length}</span></span>` : ''}
-          ${hasMandado ? '<span class="calendar-badge calendar-badge--mandado"><span class="calendar-badge__label">🛒</span></span>' : ''}
+          ${dayData.incomes.length ? `<span class="calendar-badge calendar-badge--income"><span class="calendar-badge__label">${iconMarkup('trending-up', { size: 10 })}${dayData.incomes.length}</span></span>` : ''}
+          ${dayData.expenses.length ? `<span class="calendar-badge calendar-badge--expense"><span class="calendar-badge__label">${iconMarkup('trending-down', { size: 10 })}${dayData.expenses.length}</span></span>` : ''}
+          ${hasMandado ? `<span class="calendar-badge calendar-badge--mandado"><span class="calendar-badge__label">${iconMarkup('cart', { size: 10 })}</span></span>` : ''}
         </span>
       `;
       cell.addEventListener('click', () => {
@@ -148,7 +164,7 @@ export function renderCalendarModule(container) {
     header.style.flexWrap = 'wrap';
 
     const title = document.createElement('div');
-    title.className = 'summary-card__label';
+    title.className = 'card-title';
     title.textContent = formatDateLong(selectedDate);
 
     const actions = document.createElement('div');
@@ -185,62 +201,67 @@ export function renderCalendarModule(container) {
     return card;
   }
 
+  // Mismo lenguaje visual que "Próximos movimientos" del Dashboard e Ingresos/Gastos (icono +
+  // cuerpo + monto + menú ⋮) — ver .movement-row* en css/components.css.
   function renderMovementList(items, kind, total) {
     const isIncome = kind === 'income';
     const categoryRepo = isIncome ? incomeTypeRepo : expenseCategoryRepo;
 
     const section = document.createElement('div');
     section.className = 'mb-md';
-    section.innerHTML = `<div class="summary-card__label mb-md">${isIncome ? 'Ingresos' : 'Gastos'} del día — ${formatMoney(total)}</div>`;
+    section.innerHTML = `<div class="card-title mb-md">${isIncome ? 'Ingresos' : 'Gastos'} del día — ${formatMoney(total)}</div>`;
 
-    const list = document.createElement('ul');
-    list.className = 'top-expenses-list';
+    const list = document.createElement('div');
+    list.className = 'movement-list';
 
     items.forEach((item) => {
       const categoryId = isIncome ? item.incomeTypeId : item.categoryId;
       const categoryName = categoryRepo.list().find((c) => c.id === categoryId)?.name || 'Sin categoría';
       const recurrent = item.frequency !== 'once';
 
-      const li = document.createElement('li');
+      const row = document.createElement('div');
+      row.className = 'movement-row';
 
-      const info = document.createElement('span');
-      info.innerHTML = `${escapeHtml(item.description)} <span class="text-muted">(${escapeHtml(categoryName)}${recurrent ? ` · 🔁 ${escapeHtml(frequencyLabel(item.frequency))}` : ''})</span>`;
+      const icon = document.createElement('span');
+      icon.className = `movement-row__icon${isIncome ? ' movement-row__icon--income' : ' movement-row__icon--expense'}`;
+      icon.innerHTML = iconMarkup(isIncome ? 'trending-up' : 'trending-down', { size: 18 });
 
-      const right = document.createElement('span');
-      right.className = 'flex gap-xs items-center';
+      const body = document.createElement('div');
+      body.className = 'movement-row__body';
+      body.innerHTML = `
+        <div class="movement-row__title">${escapeHtml(item.description)}</div>
+        <div class="movement-row__subtitle">${escapeHtml(categoryName)}${recurrent ? ` · ${escapeHtml(frequencyLabel(item.frequency))}` : ''}</div>
+      `;
 
-      const amountSpan = document.createElement('span');
-      amountSpan.textContent = formatMoney(item.amount);
+      const amount = document.createElement('span');
+      amount.className = `movement-row__amount${isIncome ? ' movement-row__amount--income' : ''}`;
+      amount.textContent = `${isIncome ? '+' : '-'}${formatMoney(item.amount)}`;
 
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.className = 'btn btn--ghost';
-      editBtn.textContent = 'Editar';
-      editBtn.addEventListener('click', () => openMovementForm({ type: kind, existing: item, onSaved: render }));
-
-      const delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.className = 'btn btn--danger';
-      delBtn.textContent = 'Eliminar';
-      delBtn.addEventListener('click', async () => {
-        const confirmed = await confirmDialog({
-          title: `Eliminar ${isIncome ? 'ingreso' : 'gasto'}`,
-          message: recurrent
-            ? `"${escapeHtml(item.description)}" es recurrente (${escapeHtml(frequencyLabel(item.frequency))}). Eliminarlo quitará TODAS sus ocurrencias, no solo este día. ¿Continuar?`
-            : `¿Eliminar "${escapeHtml(item.description)}"? Esta acción no se puede deshacer.`,
-          confirmText: 'Eliminar',
+      const menu = createActionMenu(`Más acciones para ${item.description}`, [
+        { label: 'Editar', onClick: () => openMovementForm({ type: kind, existing: item, onSaved: render }) },
+        {
+          label: 'Eliminar',
           danger: true,
-        });
-        if (confirmed) {
-          (isIncome ? IncomeRepository : ExpenseRepository).remove(item.id);
-          showToast(`${isIncome ? 'Ingreso' : 'Gasto'} eliminado`);
-          render();
-        }
-      });
+          onClick: async () => {
+            const confirmed = await confirmDialog({
+              title: `Eliminar ${isIncome ? 'ingreso' : 'gasto'}`,
+              message: recurrent
+                ? `"${escapeHtml(item.description)}" es recurrente (${escapeHtml(frequencyLabel(item.frequency))}). Eliminarlo quitará TODAS sus ocurrencias, no solo este día. ¿Continuar?`
+                : `¿Eliminar "${escapeHtml(item.description)}"? Esta acción no se puede deshacer.`,
+              confirmText: 'Eliminar',
+              danger: true,
+            });
+            if (confirmed) {
+              (isIncome ? IncomeRepository : ExpenseRepository).remove(item.id);
+              showToast(`${isIncome ? 'Ingreso' : 'Gasto'} eliminado`);
+              render();
+            }
+          },
+        },
+      ]);
 
-      right.append(amountSpan, editBtn, delBtn);
-      li.append(info, right);
-      list.appendChild(li);
+      row.append(icon, body, amount, menu);
+      list.appendChild(row);
     });
 
     section.appendChild(list);

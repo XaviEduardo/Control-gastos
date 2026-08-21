@@ -1,12 +1,16 @@
 // Configuración > Datos: moneda, información de almacenamiento, respaldo (exportar/importar)
 // y restablecer. Usa exclusivamente StorageService (nunca localStorage directo) y State
 // para leer/escribir settings — ver docs/architecture.md, docs/decisions.md.
+// Rediseño "Minimal Finance" (ver docs/ui-ux-audit.md): misma lógica de siempre
+// (exportData/importData/clear/getLastUpdated), presentación en lista de ajustes agrupada
+// por secciones en vez de una card grande por acción.
 
 import State from '../../core/state.js';
 import StorageService from '../../core/storage.js';
 import { setCurrency } from '../../core/currency.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
+import { iconMarkup } from '../../components/icons.js';
 import { formatDateTime, toISODate } from '../../core/dates.js';
 import { escapeHtml } from '../../core/validators.js';
 
@@ -38,28 +42,81 @@ export function renderSettingsModule(container) {
   function render() {
     root.innerHTML = '';
     root.append(
-      renderPreferences(),
-      renderStorageInfo(),
+      renderHeader(),
+      renderPreferencesSection(),
+      renderDataSection(),
       renderBackupSection(),
       renderResetSection(),
     );
   }
 
+  function renderHeader() {
+    const wrap = document.createElement('div');
+    wrap.className = 'dashboard-header mb-md';
+    wrap.innerHTML = `
+      <div class="dashboard-header__eyebrow">Configuración</div>
+      <h2 class="dashboard-header__title">Preferencias y datos</h2>
+    `;
+    return wrap;
+  }
+
+  // Contenedor genérico: título de sección (eyebrow) + lista de filas agrupadas — evita que
+  // cada ajuste sea su propia card grande (ver PASS 5, "no convertir todo en cards enormes").
+  function renderSection(title, rows) {
+    const section = document.createElement('div');
+    section.className = 'settings-section mb-md';
+    section.innerHTML = `<div class="settings-section__title">${escapeHtml(title)}</div>`;
+    const list = document.createElement('div');
+    list.className = 'settings-list';
+    rows.forEach((row) => list.appendChild(row));
+    section.appendChild(list);
+    return section;
+  }
+
+  // Fila de ajuste "de control" (ej. un <select>) — no es tappable, no lleva chevron.
+  function settingsControlRow({ icon, title, subtitle, control }) {
+    const row = document.createElement('div');
+    row.className = 'settings-row';
+    const iconChip = icon ? `<span class="kpi-card__icon">${iconMarkup(icon, { size: 18 })}</span>` : '';
+    row.innerHTML = `
+      ${iconChip}
+      <span class="settings-row__body">
+        <span class="settings-row__title">${escapeHtml(title)}</span>
+        ${subtitle ? `<span class="settings-row__subtitle">${escapeHtml(subtitle)}</span>` : ''}
+      </span>
+    `;
+    row.appendChild(control);
+    return row;
+  }
+
+  // Fila de ajuste "tappable" (dispara una acción al hacer click en toda la fila, con
+  // chevron a la derecha) — ej. "Exportar respaldo", "Restablecer datos".
+  function settingsActionRow({ icon, title, subtitle, danger, onAction }) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'settings-row settings-row--action';
+    const iconChip = icon ? `<span class="kpi-card__icon${danger ? ' kpi-card__icon--danger' : ''}">${iconMarkup(icon, { size: 18 })}</span>` : '';
+    row.innerHTML = `
+      ${iconChip}
+      <span class="settings-row__body">
+        <span class="settings-row__title${danger ? ' settings-row__title--danger' : ''}">${escapeHtml(title)}</span>
+        ${subtitle ? `<span class="settings-row__subtitle">${escapeHtml(subtitle)}</span>` : ''}
+      </span>
+      <span class="settings-row__chevron" aria-hidden="true">${iconMarkup('chevron-down', { size: 16 })}</span>
+    `;
+    row.querySelector('.settings-row__chevron').style.transform = 'rotate(-90deg)';
+    row.addEventListener('click', onAction);
+    return row;
+  }
+
   // ---------- Preferencias ----------
 
-  function renderPreferences() {
-    const card = document.createElement('div');
-    card.className = 'card mb-md';
-    card.innerHTML = '<div class="summary-card__label mb-md">Preferencias</div>';
-
+  function renderPreferencesSection() {
     const settings = State.getSettings();
-    const wrap = document.createElement('div');
-    wrap.className = 'flex items-center gap-sm';
-    wrap.innerHTML = `
-      <label for="settingsCurrency" style="margin:0;">Moneda</label>
-      <select id="settingsCurrency">${CURRENCY_OPTIONS.map((c) => `<option value="${c.value}">${escapeHtml(c.label)}</option>`).join('')}</select>
-    `;
-    const select = wrap.querySelector('select');
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', 'Moneda');
+    select.style.width = 'auto';
+    select.innerHTML = CURRENCY_OPTIONS.map((c) => `<option value="${c.value}">${escapeHtml(c.label)}</option>`).join('');
     select.value = settings.currency || 'MXN';
     select.addEventListener('change', () => {
       State.setSettings({ currency: select.value });
@@ -68,11 +125,11 @@ export function renderSettingsModule(container) {
       render();
     });
 
-    card.appendChild(wrap);
-    return card;
+    const row = settingsControlRow({ icon: 'wallet', title: 'Moneda', control: select });
+    return renderSection('Preferencias', [row]);
   }
 
-  // ---------- Información del almacenamiento ----------
+  // ---------- Datos (información del almacenamiento) ----------
 
   function storageStats() {
     const data = StorageService.exportData() || {};
@@ -85,17 +142,24 @@ export function renderSettingsModule(container) {
     return { sizeKB, counts, lastUpdated: StorageService.getLastUpdated() };
   }
 
-  function renderStorageInfo() {
-    const card = document.createElement('div');
-    card.className = 'card mb-md';
+  function renderDataSection() {
     const { sizeKB, counts, lastUpdated } = storageStats();
+    const lastUpdatedText = lastUpdated ? formatDateTime(lastUpdated) : 'todavía no se ha guardado nada';
 
-    card.innerHTML = `
-      <div class="summary-card__label mb-md">Información del almacenamiento</div>
-      <p class="text-muted">Motor: localStorage (navegador) · Tamaño de tus datos: ${sizeKB} KB</p>
-      <p class="text-muted mt-md">Último guardado: ${lastUpdated ? escapeHtml(formatDateTime(lastUpdated)) : 'todavía no se ha guardado nada'}</p>
+    const row = document.createElement('div');
+    row.className = 'settings-row';
+    row.innerHTML = `
+      <span class="kpi-card__icon">${iconMarkup('bar-chart', { size: 18 })}</span>
+      <span class="settings-row__body">
+        <span class="settings-row__title">Uso de almacenamiento</span>
+        <span class="settings-row__subtitle">localStorage · ${sizeKB} KB · Último guardado: ${escapeHtml(lastUpdatedText)}</span>
+      </span>
     `;
 
+    const detail = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Ver detalle por tipo de dato';
+    detail.appendChild(summary);
     const list = document.createElement('ul');
     list.className = 'breakdown-list mt-md';
     counts.forEach(({ label, count }) => {
@@ -103,32 +167,45 @@ export function renderSettingsModule(container) {
       li.innerHTML = `<span>${escapeHtml(label)}</span><span>${count}</span>`;
       list.appendChild(li);
     });
-    card.appendChild(list);
+    detail.appendChild(list);
 
-    return card;
+    const wrap = document.createElement('div');
+    wrap.className = 'settings-list';
+    wrap.appendChild(row);
+    const detailWrap = document.createElement('div');
+    detailWrap.style.padding = 'var(--space-md)';
+    detailWrap.appendChild(detail);
+    wrap.appendChild(detailWrap);
+
+    const section = document.createElement('div');
+    section.className = 'settings-section mb-md';
+    section.innerHTML = '<div class="settings-section__title">Datos</div>';
+    section.appendChild(wrap);
+    return section;
   }
 
   // ---------- Respaldo (exportar / importar) ----------
 
   function renderBackupSection() {
-    const card = document.createElement('div');
-    card.className = 'card mb-md';
-    card.innerHTML = '<div class="summary-card__label mb-md">Respaldo</div>';
+    const exportRow = settingsActionRow({
+      icon: 'arrow-down-right',
+      title: 'Exportar respaldo',
+      subtitle: 'Descarga una copia de todos tus datos',
+      onAction: exportBackup,
+    });
 
-    const actions = document.createElement('div');
-    actions.className = 'flex gap-sm';
-    actions.style.flexWrap = 'wrap';
-
-    const exportBtn = document.createElement('button');
-    exportBtn.type = 'button';
-    exportBtn.className = 'btn btn--primary';
-    exportBtn.textContent = '⬇ Exportar respaldo';
-    exportBtn.addEventListener('click', exportBackup);
-
-    const importLabel = document.createElement('label');
-    importLabel.className = 'btn btn--ghost';
-    importLabel.textContent = '⬆ Importar respaldo';
-    importLabel.style.cursor = 'pointer';
+    // Fila-<label> nativa: tocar toda la fila abre el selector de archivos, igual que antes
+    // (el <input type="file"> real sigue siendo el único mecanismo, solo cambia el envoltorio).
+    const importRow = document.createElement('label');
+    importRow.className = 'settings-row settings-row--action';
+    importRow.innerHTML = `
+      <span class="kpi-card__icon">${iconMarkup('arrow-up-right', { size: 18 })}</span>
+      <span class="settings-row__body">
+        <span class="settings-row__title">Importar respaldo</span>
+        <span class="settings-row__subtitle">Reemplaza por completo los datos actuales</span>
+      </span>
+      <span class="settings-row__chevron" aria-hidden="true" style="transform:rotate(-90deg)">${iconMarkup('chevron-down', { size: 16 })}</span>
+    `;
     const importInput = document.createElement('input');
     importInput.type = 'file';
     importInput.accept = 'application/json,.json';
@@ -138,17 +215,9 @@ export function renderSettingsModule(container) {
       if (file) importBackup(file);
       importInput.value = '';
     });
-    importLabel.appendChild(importInput);
+    importRow.appendChild(importInput);
 
-    actions.append(exportBtn, importLabel);
-    card.appendChild(actions);
-
-    const note = document.createElement('p');
-    note.className = 'text-muted mt-md';
-    note.textContent = 'El respaldo incluye todos tus ingresos, gastos, categorías, mandado, tiendas, precios y presupuestos. Importar un respaldo reemplaza por completo los datos actuales.';
-    card.appendChild(note);
-
-    return card;
+    return renderSection('Respaldo', [exportRow, importRow]);
   }
 
   function exportBackup() {
@@ -209,32 +278,30 @@ export function renderSettingsModule(container) {
   }
 
   // ---------- Restablecer ----------
+  // Estilo danger en el texto/icono (ver settingsActionRow danger:true) — sin exagerar
+  // visualmente (no es un botón rojo enorme), la confirmación existente es la barrera real.
 
   function renderResetSection() {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = '<div class="summary-card__label mb-md">Restablecer datos</div><p class="text-muted mb-md">Borra permanentemente toda la información guardada en este navegador y vuelve a cargar los datos de ejemplo iniciales.</p>';
+    const row = settingsActionRow({
+      icon: 'settings',
+      title: 'Restablecer datos',
+      subtitle: 'Borra todo permanentemente y vuelve a los datos de ejemplo iniciales',
+      danger: true,
+      onAction: async () => {
+        const confirmed = await confirmDialog({
+          title: 'Restablecer datos',
+          message: '¿Estás seguro de que deseas eliminar TODOS los datos? Esta acción no se puede deshacer.',
+          confirmText: 'Eliminar todo',
+          danger: true,
+        });
+        if (!confirmed) return;
 
-    const resetBtn = document.createElement('button');
-    resetBtn.type = 'button';
-    resetBtn.className = 'btn btn--danger';
-    resetBtn.textContent = 'Restablecer datos';
-    resetBtn.addEventListener('click', async () => {
-      const confirmed = await confirmDialog({
-        title: 'Restablecer datos',
-        message: '¿Estás seguro de que deseas eliminar TODOS los datos? Esta acción no se puede deshacer.',
-        confirmText: 'Eliminar todo',
-        danger: true,
-      });
-      if (!confirmed) return;
-
-      StorageService.clear();
-      showToast('Datos restablecidos. Recargando la aplicación…');
-      setTimeout(() => window.location.reload(), 700);
+        StorageService.clear();
+        showToast('Datos restablecidos. Recargando la aplicación…');
+        setTimeout(() => window.location.reload(), 700);
+      },
     });
-
-    card.appendChild(resetBtn);
-    return card;
+    return renderSection('Restablecer', [row]);
   }
 
   render();

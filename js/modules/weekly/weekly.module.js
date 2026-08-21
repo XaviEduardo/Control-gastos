@@ -2,9 +2,12 @@
 // No crea ni duplica ninguna entidad.
 
 import State from '../../core/state.js';
+import { renderStatCard } from '../../components/stat-card.js';
+import { renderProgressCard } from '../../components/progress-card.js';
+import { escapeHtml } from '../../core/validators.js';
 import { formatMoney, formatPercent } from '../../core/currency.js';
 import { formatDateShort, startOfWeek, endOfWeek, getISOWeekNumber, toISODate, parseFlexibleDate } from '../../core/dates.js';
-import { totalIncome, totalExpenses, balance, mandadoTotal } from '../../services/financeService.js';
+import { totalIncome, totalExpenses, balance, mandadoTotal, expensesByCategory } from '../../services/financeService.js';
 import { budgetProgress } from '../../services/budgetService.js';
 import BudgetRepository from '../budget/budget.repository.js';
 
@@ -44,27 +47,38 @@ export function renderWeeklyModule(container) {
     const percentUsed = income > 0 ? expense / income : null;
     const weeklyBudget = BudgetRepository.find('weekly');
 
-    const sections = [renderNav(), renderStats({ income, expense, mandado })];
-    if (weeklyBudget) sections.push(renderBudgetSection(weeklyBudget, period));
+    const sections = [renderHeader(), renderNav(), renderStats({ income, expense, mandado })];
+    if (weeklyBudget) {
+      const progressCard = renderProgressCard('Presupuesto semanal', budgetProgress(weeklyBudget, period), { icon: 'target' });
+      progressCard.classList.add('mb-md');
+      sections.push(progressCard);
+    }
     sections.push(renderUsageBar(percentUsed));
+    sections.push(renderCategoryBreakdown(period));
     root.append(...sections);
   }
 
-  function renderBudgetSection(budget, period) {
-    const progress = budgetProgress(budget, period);
-    const over = progress.remaining < 0;
-    const finite = Number.isFinite(progress.percentUsed);
-    const pctForBar = finite ? Math.min(progress.percentUsed * 100, 100) : 100;
-    const pctText = finite ? formatPercent(progress.percentUsed, 2) : 'más de 100%';
-
-    const card = document.createElement('div');
-    card.className = 'card mb-md';
-    card.innerHTML = `
-      <div class="summary-card__label mb-md">Presupuesto semanal</div>
-      <div class="text-muted">Presupuesto ${formatMoney(progress.amount)} · Gastado ${formatMoney(progress.spent)} · ${over ? 'Excedido' : 'Disponible'} ${formatMoney(Math.abs(progress.remaining))}</div>
-      <div class="progress-bar mt-md"><div class="progress-bar__fill${over ? ' progress-bar__fill--over' : ''}" style="width:${pctForBar}%"></div></div>
-      <div class="text-muted mt-md">${pctText} utilizado${over ? ' — presupuesto excedido' : ''}</div>
+  function renderHeader() {
+    const wrap = document.createElement('div');
+    wrap.className = 'dashboard-header mb-md';
+    wrap.innerHTML = `
+      <div class="dashboard-header__eyebrow">Finanzas</div>
+      <h2 class="dashboard-header__title">Semana</h2>
     `;
+    return wrap;
+  }
+
+  // "¿En qué estoy gastando?" (ver rediseño PASS 3) — mismo expensesByCategory() que ya usa
+  // Mes/Reportes, aplicado al periodo semanal en vez de mensual.
+  function renderCategoryBreakdown(period) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const rows = expensesByCategory(period)
+      .filter((entry) => entry.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .map((entry) => `<li><span>${escapeHtml(entry.category.name)}</span><span>${formatMoney(entry.total)}</span></li>`)
+      .join('');
+    card.innerHTML = `<div class="card-title mb-md">En qué estás gastando esta semana</div><ul class="breakdown-list">${rows || '<li class="text-muted">Sin gastos esta semana.</li>'}</ul>`;
     return card;
   }
 
@@ -109,34 +123,29 @@ export function renderWeeklyModule(container) {
     const grid = document.createElement('div');
     grid.className = 'stats-grid mb-md';
 
-    grid.appendChild(statCard('Ingresos', formatMoney(income)));
-    grid.appendChild(statCard('Gastos', formatMoney(expense)));
-    grid.appendChild(statCard('Balance', formatMoney(income - expense), income - expense < 0 ? 'negative' : 'positive'));
-    if (mandado !== null) grid.appendChild(statCard('Mandado', formatMoney(mandado)));
+    grid.appendChild(renderStatCard('Ingresos', formatMoney(income), { icon: 'trending-up', iconTone: 'success' }));
+    grid.appendChild(renderStatCard('Gastos', formatMoney(expense), { icon: 'trending-down', iconTone: 'danger' }));
+    grid.appendChild(renderStatCard('Balance', formatMoney(income - expense), {
+      icon: 'bank', hero: true,
+    }));
+    if (mandado !== null) grid.appendChild(renderStatCard('Mandado', formatMoney(mandado), { icon: 'cart' }));
 
     return grid;
   }
 
-  function statCard(label, value, tone) {
-    const card = document.createElement('div');
-    card.className = `card stat-card${tone ? ` stat-card--${tone}` : ''}`;
-    card.innerHTML = `<div class="summary-card__label">${label}</div><div class="summary-card__value">${value}</div>`;
-    return card;
-  }
-
   function renderUsageBar(percentUsed) {
     const card = document.createElement('div');
-    card.className = 'card';
+    card.className = 'card mb-md';
 
     if (percentUsed === null) {
-      card.innerHTML = `<div class="summary-card__label">% de ingreso utilizado</div><p class="text-muted mt-md">Sin ingresos registrados esta semana.</p>`;
+      card.innerHTML = `<div class="card-title">% de ingreso utilizado</div><p class="text-muted mt-md">Sin ingresos registrados esta semana.</p>`;
       return card;
     }
 
     const pct = Math.round(percentUsed * 100);
     const over = pct > 100;
     card.innerHTML = `
-      <div class="summary-card__label mb-md">% de ingreso utilizado</div>
+      <div class="card-title mb-md">% de ingreso utilizado</div>
       <div class="progress-bar"><div class="progress-bar__fill${over ? ' progress-bar__fill--over' : ''}" style="width:${Math.min(pct, 100)}%"></div></div>
       <div class="text-muted mt-md">${formatPercent(percentUsed)}${over ? ' — el gasto superó el ingreso de la semana' : ''}</div>
     `;

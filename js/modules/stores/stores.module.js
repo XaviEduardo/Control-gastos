@@ -1,9 +1,12 @@
 import StoreRepository from './store.repository.js';
+import PriceRepository from '../prices/price.repository.js';
+import ProductRepository from '../grocery/product.repository.js';
 import { renderTable } from '../../components/table.js';
 import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { openModal } from '../../components/modal.js';
 import { showToast } from '../../components/toast.js';
+import { formatDateShort, parseFlexibleDate } from '../../core/dates.js';
 import { isRequired, validate, escapeHtml } from '../../core/validators.js';
 
 export function renderStoresModule(container) {
@@ -12,6 +15,17 @@ export function renderStoresModule(container) {
   const root = document.createElement('div');
   root.className = 'module-view';
   container.appendChild(root);
+
+  // Conteo de productos distintos con precio registrado en esta tienda + el registro más
+  // reciente — ambos derivados de PriceRepository, no son datos nuevos ni cálculos nuevos.
+  function storeStats(storeId) {
+    const entries = PriceRepository.all().filter((p) => p.storeId === storeId);
+    const productCount = new Set(entries.map((p) => p.productId)).size;
+    const latest = entries.reduce((best, e) => (
+      !best || parseFlexibleDate(e.date) > parseFlexibleDate(best.date) ? e : best
+    ), null);
+    return { productCount, latest };
+  }
 
   function filteredStores() {
     const term = view.search.trim().toLowerCase();
@@ -22,7 +36,17 @@ export function renderStoresModule(container) {
 
   function render() {
     root.innerHTML = '';
-    root.append(renderToolbar(), renderListSection());
+    root.append(renderHeader(), renderToolbar(), renderListSection());
+  }
+
+  function renderHeader() {
+    const wrap = document.createElement('div');
+    wrap.className = 'dashboard-header mb-md';
+    wrap.innerHTML = `
+      <div class="dashboard-header__eyebrow">Mandado</div>
+      <h2 class="dashboard-header__title">Tiendas</h2>
+    `;
+    return wrap;
   }
 
   function renderToolbar() {
@@ -75,7 +99,8 @@ export function renderStoresModule(container) {
         { key: 'name', label: 'Tienda' },
         { key: 'location', label: 'Ubicación', render: (row) => escapeHtml(row.location || '—') },
         { key: 'notes', label: 'Notas', render: (row) => escapeHtml(row.notes || '') },
-        { key: 'status', label: 'Estado', render: (row) => (row.status === 'active' ? 'Activa' : 'Inactiva') },
+        { key: 'products', label: 'Productos', align: 'right', render: (row) => String(storeStats(row.id).productCount) },
+        { key: 'status', label: 'Estado', render: (row) => (row.status === 'active' ? '<span class="badge badge--success">Activa</span>' : '<span class="badge badge--neutral">Inactiva</span>') },
       ],
       rows: stores,
       rowActions: (row) => buildRowActions(row),
@@ -110,20 +135,39 @@ export function renderStoresModule(container) {
 
     const subtitle = document.createElement('div');
     subtitle.className = 'responsive-card-list__subtitle';
-    subtitle.textContent = `${row.location || 'Sin ubicación'} · ${row.status === 'active' ? 'Activa' : 'Inactiva'}`;
+    subtitle.textContent = row.location || 'Sin ubicación';
 
     card.append(header, subtitle);
 
+    const body = document.createElement('div');
+    body.className = 'responsive-card-list__body';
+
+    const stats = storeStats(row.id);
+    const statsRow = document.createElement('div');
+    statsRow.className = 'flex justify-between items-center';
+    statsRow.innerHTML = `<span class="text-muted">Productos registrados</span><span style="font-weight:700">${stats.productCount}</span>`;
+    body.appendChild(statsRow);
+
+    const latestRow = document.createElement('div');
+    latestRow.className = 'text-muted mt-md';
+    latestRow.textContent = stats.latest
+      ? `Última actualización: ${ProductRepository.getById(stats.latest.productId)?.name || 'Producto eliminado'} · ${formatDateShort(stats.latest.date)}`
+      : 'Sin precios registrados todavía';
+    body.appendChild(latestRow);
+
     if (row.notes) {
-      const body = document.createElement('div');
-      body.className = 'responsive-card-list__body';
       const note = document.createElement('span');
       note.className = 'text-muted';
       note.textContent = row.notes;
       body.appendChild(note);
-      card.appendChild(body);
     }
 
+    const statusRow = document.createElement('div');
+    statusRow.className = 'mt-md';
+    statusRow.innerHTML = row.status === 'active' ? '<span class="badge badge--success">Activa</span>' : '<span class="badge badge--neutral">Inactiva</span>';
+    body.appendChild(statusRow);
+
+    card.appendChild(body);
     return card;
   }
 

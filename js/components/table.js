@@ -1,7 +1,8 @@
 import { escapeHtml } from '../core/validators.js';
 
-// columns: [{ key, label, render?(row) }]. render() puede devolver HTML de confianza
-// (calculado por el módulo); las celdas por defecto se escapan automáticamente.
+// columns: [{ key, label, render?(row), align? }]. render() puede devolver HTML de confianza
+// (calculado por el módulo); las celdas por defecto se escapan automáticamente. `align:'right'`
+// alinea esa columna (ej. montos) sin afectar el dato ni el cálculo, solo la celda/encabezado.
 //
 // renderCard(row, actionsNode) es opcional: si se pasa, renderTable() arma además una lista
 // de tarjetas (misma `rows`, sin estado ni fuente de datos duplicada) para mostrar en móvil
@@ -21,13 +22,13 @@ export function renderTable({ columns, rows, emptyMessage = 'Sin datos todavía.
   table.className = 'data-table';
 
   const thead = document.createElement('thead');
-  thead.innerHTML = `<tr>${columns.map((c) => `<th>${escapeHtml(c.label)}</th>`).join('')}${rowActions ? '<th></th>' : ''}</tr>`;
+  thead.innerHTML = `<tr>${columns.map((c) => `<th${c.align ? ` style="text-align:${c.align}"` : ''}>${escapeHtml(c.label)}</th>`).join('')}${rowActions ? '<th></th>' : ''}</tr>`;
 
   const tbody = document.createElement('tbody');
   rows.forEach((row) => {
     const tr = document.createElement('tr');
     tr.innerHTML = columns
-      .map((c) => `<td>${c.render ? c.render(row) : escapeHtml(row[c.key] ?? '')}</td>`)
+      .map((c) => `<td${c.align ? ` style="text-align:${c.align}"` : ''}>${c.render ? c.render(row) : escapeHtml(row[c.key] ?? '')}</td>`)
       .join('');
     if (rowActions) {
       const td = document.createElement('td');

@@ -2,12 +2,11 @@ import State from '../../core/state.js';
 import BudgetRepository from './budget.repository.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import { budgetProgress } from '../../services/budgetService.js';
-import { renderStatCard } from '../../components/stat-card.js';
+import { renderProgressCard } from '../../components/progress-card.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { openModal } from '../../components/modal.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
-import { formatMoney, formatPercent } from '../../core/currency.js';
 import { parseFlexibleDate } from '../../core/dates.js';
 import { isRequired, isNonNegativeNumber, validate, escapeHtml } from '../../core/validators.js';
 
@@ -32,6 +31,8 @@ export function renderBudgetModule(container) {
   function render() {
     root.innerHTML = '';
     const { month, week } = currentPeriods();
+
+    root.appendChild(renderHeader());
 
     root.appendChild(renderBudgetCard({
       title: 'Presupuesto mensual total',
@@ -60,18 +61,25 @@ export function renderBudgetModule(container) {
     root.appendChild(renderCategoryBudgets(month));
   }
 
+  function renderHeader() {
+    const wrap = document.createElement('div');
+    wrap.className = 'dashboard-header mb-md';
+    wrap.innerHTML = `
+      <div class="dashboard-header__eyebrow">Finanzas</div>
+      <h2 class="dashboard-header__title">Presupuesto</h2>
+    `;
+    return wrap;
+  }
+
+  // Icono puramente decorativo por scope — no afecta ningún cálculo.
+  function scopeIcon(scope) {
+    if (scope === 'weekly') return 'calendar';
+    if (scope === 'grocery') return 'cart';
+    if (scope === 'category') return 'tag';
+    return 'target';
+  }
+
   function renderBudgetCard({ title, budget, period, scope, categoryId, emptyMessage }) {
-    const card = document.createElement('div');
-    card.className = 'card mb-md';
-
-    const header = document.createElement('div');
-    header.className = 'flex justify-between items-center gap-sm mb-md';
-    header.style.flexWrap = 'wrap';
-    const label = document.createElement('div');
-    label.className = 'summary-card__label';
-    label.textContent = title;
-    header.appendChild(label);
-
     const actions = document.createElement('div');
     actions.className = 'flex gap-xs';
 
@@ -111,41 +119,30 @@ export function renderBudgetModule(container) {
       actions.appendChild(removeBtn);
     }
 
-    header.appendChild(actions);
-    card.appendChild(header);
-
     if (!budget) {
+      const card = document.createElement('div');
+      card.className = 'card mb-md';
+      const header = document.createElement('div');
+      header.className = 'progress-summary-card__header';
+      const titleEl = document.createElement('span');
+      titleEl.className = 'progress-summary-card__title';
+      titleEl.textContent = title;
+      header.append(titleEl, actions);
+      card.appendChild(header);
+
       const p = document.createElement('p');
-      p.className = 'text-muted';
+      p.className = 'text-muted mt-md';
       p.textContent = emptyMessage || 'Todavía no configuras un presupuesto para este rubro.';
       card.appendChild(p);
       return card;
     }
 
-    const progress = budgetProgress(budget, period);
-    const over = progress.remaining < 0;
-    const finite = Number.isFinite(progress.percentUsed);
-
-    const grid = document.createElement('div');
-    grid.className = 'stats-grid mb-md';
-    grid.appendChild(renderStatCard('Presupuesto', formatMoney(progress.amount)));
-    grid.appendChild(renderStatCard('Gastado', formatMoney(progress.spent)));
-    grid.appendChild(renderStatCard(
-      over ? 'Excedido' : 'Disponible',
-      formatMoney(Math.abs(progress.remaining)),
-      { tone: over ? 'negative' : 'positive' },
-    ));
-    card.appendChild(grid);
-
-    const pctForBar = finite ? Math.min(progress.percentUsed * 100, 100) : 100;
-    const pctText = finite ? formatPercent(progress.percentUsed, 2) : 'más de 100%';
-    const barWrap = document.createElement('div');
-    barWrap.innerHTML = `
-      <div class="progress-bar"><div class="progress-bar__fill${over ? ' progress-bar__fill--over' : ''}" style="width:${pctForBar}%"></div></div>
-      <div class="text-muted mt-md">${pctText} utilizado${over ? ' — presupuesto excedido' : ''}</div>
-    `;
-    card.appendChild(barWrap);
-
+    const card = renderProgressCard(title, budgetProgress(budget, period), {
+      icon: scopeIcon(scope),
+      amountFirst: true,
+      actions,
+    });
+    card.classList.add('mb-md');
     return card;
   }
 
@@ -156,7 +153,7 @@ export function renderBudgetModule(container) {
     const header = document.createElement('div');
     header.className = 'flex justify-between items-center gap-sm mb-md';
     header.style.flexWrap = 'wrap';
-    header.innerHTML = '<div class="summary-card__label">Presupuestos por categoría (mensual)</div>';
+    header.innerHTML = '<div class="card-title">Presupuestos por categoría (mensual)</div>';
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'btn btn--primary';

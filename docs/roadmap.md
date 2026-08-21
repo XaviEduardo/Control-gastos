@@ -2,6 +2,62 @@
 
 Estado: `pendiente` | `en progreso` | `hecho`
 
+## Rediseño visual global "Minimal Finance" — **hecho**
+Nuevo Design System (tokens en `css/variables.css`: primary índigo, superficies off-white,
+tipografía ampliada, radios/sombras más suaves) + iconografía SVG propia (`js/components/
+icons.js`, reemplaza el emoji) + sidebar rediseñado (claro, antes oscuro). Aplicado hasta
+ahora: **PASS 1 (Foundation)**, **PASS 2 (Dashboard + Mandado)** y **PASS 3 (Finanzas:
+Ingresos/Gastos/Semana/Mes/Presupuesto)**. Referencias visuales en `docs/dashboard-desktop.png`,
+`docs/dashboard-mobile.png`, `docs/grocery-mobile.png` — solo inspiración de lenguaje visual,
+nunca copiadas literalmente (ver reporte de cada fase para el detalle completo de qué se
+preservó/reorganizó/agregó). PASS 3 añadió dos componentes compartidos nuevos:
+`js/components/progress-card.js` (tarjeta de progreso de presupuesto con 3 estados
+normal/warning/excedido, ya usada también por Dashboard) y extendió `js/core/currency.js`
+(`kpiDelta`) y `js/components/table.js` (columnas alineadas). **PASS 4 (ecosistema Mandado:
+Productos/Categorías/Tiendas/Precios/Historial/Comparador)** hecho — migró
+`category-manager.js` al menú `⋮` compartido (con conteo opcional por ítem), agregó datos
+reales derivados vía repositorios existentes (último precio por producto, productos
+registrados por tienda, min/máx/promedio en Historial), y rediseñó el Comparador con un
+callout de "ganador" inmediato + resumen de compra optimizada agrupado por tienda (usando
+`navigateTo()` de `core/router.js`, antes definido pero sin consumidores). **PASS 5
+(Calendario/Reportes/Configuración)** hecho — header propio (mismo patrón "eyebrow + título"
+de Dashboard) en las 3 rutas; Calendario reemplazó el emoji de sus badges por los iconos SVG
+existentes y migró la lista de movimientos del día al mismo componente `.movement-row` +
+menú `⋮` que ya usan Dashboard/Ingresos/Gastos (con `flex-wrap` como red de seguridad al
+tener un 4to elemento); Reportes ganó KPIs con icono+delta (`kpiDelta`) y su paleta de charts
+se actualizó al índigo nuevo; Configuración se reescribió como lista de ajustes agrupada por
+secciones (Preferencias/Datos/Respaldo/Restablecer) en vez de una card grande por acción — el
+flujo real de exportar/importar/restablecer (`StorageService`) no cambió. **PASS 6 (QA visual
+y funcional integral)** hecho — auditoría de solo-lectura (5 dimensiones: visual, responsive,
+business logic/persistencia, calendario/charts/modales, higiene CSS/GitHub Pages) sin
+hallazgos CRÍTICOS ni ALTOS. Se corrigieron 2 MEDIOS reales: (1) las 11 rutas de
+Finanzas/Mandado (Ingresos/Gastos/Semana/Mes/Presupuesto/Mi Lista/Productos/Categorías/
+Tiendas/Historial/Comparador) no tenían el header `dashboard-header` (eyebrow+título) que ya
+usaban Dashboard/Calendario/Reportes/Configuración — se agregó a las 11, con eyebrow "Finanzas"
+o "Mandado" según el grupo; (2) la paleta de charts de Historial de precios seguía con los
+colores viejos (`#2f6fed`/`#1f9d55`/...) en vez del índigo del Design System — actualizada para
+igualar a Reportes/Dashboard. Confirmado sin cambios a lógica financiera, WEIGHT/UNIT,
+Comparador, recurrencias ni `StorageService`. **PASS 7 (Final Polish)** hecho — auditoría de
+solo-lectura (4 dimensiones: spacing/sizing/tokens, microinteractions/hover/focus, empty
+states/iconografía, densidad mobile 390×844 y desktop 1440×900) y corrección de los hallazgos
+ALTO/MEDIO/BAJO seguros: `.btn` con `line-height:1.2` (antes se veía más alto que su
+`input`/`select` vecino en cada toolbar); tamaño de ícono unificado a `size:18` dentro del chip
+`.kpi-card__icon` (`progress-card.js` y 4 usos en `settings.module.js` tenían `16` mientras
+Dashboard/Reportes/Ingresos/Gastos usaban `18`); columnas "Precio"/"Normalizado" del Historial
+de precios alineadas a la derecha (única tabla monetaria que no lo estaba); transición
+`background`/`width` agregada a `.sidebar__link`, `.modal-close`, `.action-menu__toggle`,
+`.action-menu__item`, `.settings-row--action` y `.progress-bar__fill` (elementos interactivos
+sin feedback de transición); bloque global `@media (prefers-reduced-motion: reduce)` agregado
+(no existía ninguno); `.app-content` con `max-width:1280px` + `margin-inline:auto` (se estiraba
+sin límite en 1440-1920px); `.sidebar-toggle` de 40px a 44px (objetivo táctil); emoji suelto
+`📝` quitado de un ítem de menú `⋮` en Mi Lista y `✓` Unicode quitado de un botón en el
+Comparador (ambos ya inconsistentes con el sistema de iconos SVG). Documentados sin corregir
+(requieren tocar JS de apertura, no son cambios solo-CSS seguros): transición de entrada del
+panel `⋮` y del modal — ambos usan `display:none`/montaje directo, no animables sin cambiar el
+mecanismo de toggle. Confirmado sin cambios a lógica financiera, WEIGHT/UNIT, Comparador,
+recurrencias ni `StorageService`. Rediseño global "Minimal Finance" **completo** (PASS 1-7).
+No continuar sin autorización explícita para nuevas fases.
+
 ## Fase 0 — Investigación — **hecho**
 - Inspeccionar Excel, documentar en `excel-analysis.md`.
 - Definir modelo de datos (`data-model.md`) y arquitectura (`architecture.md`).

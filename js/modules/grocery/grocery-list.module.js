@@ -10,12 +10,12 @@ import { createCategoryRepository } from '../shared/category-repository.js';
 import ExpenseRepository from '../expenses/expense.repository.js';
 import { itemsForList, categoryTotals, listTotals, itemEffectiveSubtotal } from '../../services/groceryService.js';
 import { renderEmptyState } from '../../components/empty-state.js';
-import { renderStatCard } from '../../components/stat-card.js';
 import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
+import { iconMarkup } from '../../components/icons.js';
 import { openModal } from '../../components/modal.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
-import { formatMoney } from '../../core/currency.js';
+import { formatMoney, formatPercent } from '../../core/currency.js';
 import { toISODate, formatDateShort } from '../../core/dates.js';
 import { isRequired, isPositiveNumber, validate, escapeHtml } from '../../core/validators.js';
 import { UNIT_OPTIONS } from './units.js';
@@ -51,6 +51,7 @@ export function renderGroceryListModule(container) {
     const lists = currentLists();
     ensureSelection(lists);
 
+    root.appendChild(renderHeader());
     root.appendChild(renderListSelector(lists));
 
     if (!selectedListId) {
@@ -65,9 +66,18 @@ export function renderGroceryListModule(container) {
     }
 
     const list = GroceryListRepository.getById(selectedListId);
-    root.appendChild(renderListHeader(list));
     root.appendChild(renderTotalsSummary(list));
     root.appendChild(renderItemsByCategory(list));
+  }
+
+  function renderHeader() {
+    const wrap = document.createElement('div');
+    wrap.className = 'dashboard-header mb-md';
+    wrap.innerHTML = `
+      <div class="dashboard-header__eyebrow">Mandado</div>
+      <h2 class="dashboard-header__title">Mi Lista</h2>
+    `;
+    return wrap;
   }
 
   function renderListSelector(lists) {
@@ -143,38 +153,60 @@ export function renderGroceryListModule(container) {
     return bar;
   }
 
-  function renderListHeader(list) {
-    const card = document.createElement('div');
-    card.className = 'card mb-md';
-    const metaParts = [];
-    if (list.startDate) metaParts.push(formatDateShort(list.startDate));
-    if (list.notes) metaParts.push(escapeHtml(list.notes));
-    card.innerHTML = `
-      <div class="summary-card__value">${escapeHtml(list.name)}${list.status === 'closed' ? ' <span class="text-muted">(completada)</span>' : ''}</div>
-      ${metaParts.length ? `<div class="text-muted mt-md">${metaParts.join(' · ')}</div>` : ''}
-    `;
-    return card;
-  }
-
+  // Tarjeta única (nombre + monto + progreso) en vez de 4 stat-cards sueltas — misma
+  // listTotals() de siempre, solo reorganizada visualmente (ver rediseño "Minimal Finance").
   function renderTotalsSummary(list) {
     const totals = listTotals(list);
     const wrap = document.createElement('div');
 
-    const grid = document.createElement('div');
-    grid.className = 'stats-grid mb-md';
-    grid.appendChild(renderStatCard('Total estimado', formatMoney(totals.estimated)));
-    grid.appendChild(renderStatCard('Total real', formatMoney(totals.real)));
+    const card = document.createElement('div');
+    card.className = 'card mb-md mandado-summary';
+
+    const metaParts = [];
+    if (list.startDate) metaParts.push(formatDateShort(list.startDate));
+    if (list.status === 'closed') metaParts.push('Completada');
+    if (list.notes) metaParts.push(escapeHtml(list.notes));
+
+    const header = document.createElement('div');
+    header.className = 'mandado-summary__header';
+    header.innerHTML = `
+      <div class="mandado-summary__title">
+        <span class="kpi-card__icon">${iconMarkup('cart', { size: 18 })}</span>
+        <span>
+          <div class="card-title">${escapeHtml(list.name)}</div>
+          ${metaParts.length ? `<div class="text-muted text-xs mt-md">${metaParts.join(' · ')}</div>` : ''}
+        </span>
+      </div>
+      <div class="mandado-summary__amount">
+        <div class="mandado-summary__amount-value">${formatMoney(totals.real)}</div>
+        <div class="mandado-summary__amount-caption">Gastado${totals.budget !== null ? ` · Est. ${formatMoney(totals.estimated)}` : ` / ${formatMoney(totals.estimated)} est.`}</div>
+      </div>
+    `;
+    card.appendChild(header);
+
     if (totals.budget !== null) {
       const over = totals.difference < 0;
-      grid.appendChild(renderStatCard(
-        over ? 'Excedido del presupuesto' : 'Disponible del presupuesto',
-        formatMoney(Math.abs(totals.difference)),
-        { tone: over ? 'negative' : 'positive' },
-      ));
-    }
-    grid.appendChild(renderStatCard('Progreso', `${totals.purchasedCount}/${totals.itemCount} comprados`));
+      const pct = totals.budget > 0 ? Math.min(totals.real / totals.budget, 1) : 0;
+      const bar = document.createElement('div');
+      bar.className = 'progress-bar mt-md';
+      bar.innerHTML = `<div class="progress-bar__fill${over ? ' progress-bar__fill--over' : ''}" style="width:${pct * 100}%"></div>`;
+      card.appendChild(bar);
 
-    wrap.appendChild(grid);
+      const footRow = document.createElement('div');
+      footRow.className = 'mandado-summary__footrow';
+      footRow.innerHTML = `
+        <span>${formatPercent(totals.budget > 0 ? totals.real / totals.budget : 0, 0)} del presupuesto${over ? ` · excedido por ${formatMoney(Math.abs(totals.difference))}` : ''}</span>
+        <span>${totals.purchasedCount}/${totals.itemCount} items</span>
+      `;
+      card.appendChild(footRow);
+    } else {
+      const footRow = document.createElement('div');
+      footRow.className = 'mandado-summary__footrow mt-md';
+      footRow.innerHTML = `<span>${totals.purchasedCount}/${totals.itemCount} items comprados</span>`;
+      card.appendChild(footRow);
+    }
+
+    wrap.appendChild(card);
     wrap.appendChild(renderExpenseLink(list, totals));
     return wrap;
   }
@@ -185,7 +217,7 @@ export function renderGroceryListModule(container) {
 
     const linkedExpense = list.linkedExpenseId ? ExpenseRepository.getById(list.linkedExpenseId) : null;
     const label = document.createElement('div');
-    label.className = 'summary-card__label mb-md';
+    label.className = 'card-title mb-md';
     label.textContent = 'Integración con Gastos';
     card.appendChild(label);
 
@@ -272,12 +304,24 @@ export function renderGroceryListModule(container) {
   }
 
   function renderCategoryGroup(list, category, items, categoryEffectiveTotal) {
+    // .mandado-category es una .card solo en escritorio; en móvil pierde el fondo/borde y
+    // cada .grocery-item-row pasa a ser su propia tarjeta suelta (ver css/responsive.css
+    // <1024px) — así se evita el look de "tarjetas dentro de una tarjeta".
     const card = document.createElement('div');
-    card.className = 'card mb-md';
+    card.className = 'mandado-category mb-md';
+
+    const purchasedInCategory = items.filter((i) => i.purchased).length;
 
     const header = document.createElement('div');
-    header.className = 'flex justify-between items-center mb-md';
-    header.innerHTML = `<div class="summary-card__label">${escapeHtml(category.name)}</div><div class="summary-card__value">${formatMoney(categoryEffectiveTotal)}</div>`;
+    header.className = 'mandado-category__header';
+    header.innerHTML = `
+      <div class="mandado-category__title">
+        <span class="mandado-category__bar" aria-hidden="true"></span>
+        <span class="card-title">${escapeHtml(category.name)}</span>
+        <span class="badge badge--neutral">${purchasedInCategory}/${items.length} items</span>
+      </div>
+      <div class="mandado-category__total">${formatMoney(categoryEffectiveTotal)}</div>
+    `;
     card.appendChild(header);
 
     const itemList = document.createElement('div');
@@ -404,7 +448,7 @@ export function renderGroceryListModule(container) {
 
     const menu = createActionMenu(`Más acciones para ${product?.name || 'producto'}`, [
       {
-        label: item.notes ? 'Notas 📝' : 'Notas',
+        label: 'Notas',
         onClick: () => {
           const value = window.prompt('Notas', item.notes || '');
           if (value !== null) {

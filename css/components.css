@@ -15,17 +15,17 @@
 .card-title { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--color-text); }
 
 /* ---------- Badges de ESTADO vs. tags de METADATO (no deben verse igual) ----------
-   Badge: pill, uppercase, color semántico — para Activo/Inactivo/Completado/Pendiente/etc.
-   Tag: rectangular pequeño, sin uppercase, tono neutro — para datos como "Lácteos"/"1.5 L". */
+   Badge: pill, color semántico — para Activo/Inactivo/Completado/Pendiente/etc.
+   Tag: rectangular pequeño, tono neutro — para datos como "Lácteos"/"1.5 L".
+   Rediseño "Minimal Finance": antes uppercase+bold (look "sistema administrativo"); ahora
+   case normal + peso medio, más calmado (ver docs/ui-ux-audit.md, dirección "controlled calm"). */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  padding: 3px 9px;
+  font-weight: var(--font-weight-medium);
+  padding: 3px 10px;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -121,6 +121,7 @@
   font-size: 1.5rem;
   line-height: 1;
   color: var(--color-text-muted);
+  transition: background var(--transition-fast);
 }
 .modal-close:hover { background: var(--color-bg); }
 
@@ -231,6 +232,9 @@
 }
 .summary-card__value { font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); margin-top: 4px; color: var(--color-text); }
 
+.dashboard-header__eyebrow { color: var(--color-text-muted); font-size: var(--font-size-md); }
+.dashboard-header__title { font-size: var(--font-size-display); font-weight: var(--font-weight-bold); color: var(--color-text); margin-top: 2px; }
+
 .breakdown-list { display: flex; flex-direction: column; gap: 6px; }
 .breakdown-list li { display: flex; justify-content: space-between; font-size: var(--font-size-sm); }
 
@@ -254,7 +258,8 @@
   border-bottom: 1px solid var(--color-border);
   flex-wrap: wrap;
 }
-.category-manager-item > span:last-child { flex-wrap: wrap; }
+/* Nombre + conteo opcional (ej. "12 productos", ver itemCount en category-manager.js) */
+.category-manager-item__name { display: flex; flex-direction: column; gap: 2px; }
 
 .period-nav {
   display: flex;
@@ -279,12 +284,133 @@
   gap: var(--space-md);
 }
 
-.stat-card--negative .summary-card__value { color: var(--color-danger); }
-.stat-card--positive .summary-card__value { color: var(--color-success); }
+.stat-card--negative .kpi-card__value { color: var(--color-danger); }
+.stat-card--positive .kpi-card__value { color: var(--color-success); }
+
+/* ---------- KPI card (rediseño "Minimal Finance" — ver js/components/stat-card.js) ----------
+   Reemplaza la composición label+value plana de .summary-card por: label + chip de icono,
+   valor grande, variación coloreada opcional. Usado por Dashboard/Reportes/Presupuesto/
+   Mandado (renderStatCard es un componente compartido — todo consumidor se beneficia). */
+.kpi-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+}
+.kpi-card__header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-sm); }
+.kpi-card__label { color: var(--color-text-secondary); font-size: var(--font-size-label); font-weight: var(--font-weight-medium); }
+.kpi-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+.kpi-card__icon--danger { background: var(--color-danger-soft); color: var(--color-danger); }
+.kpi-card__icon--success { background: var(--color-success-soft); color: var(--color-success); }
+.kpi-card__value {
+  font-size: var(--font-size-kpi);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin-top: var(--space-sm);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.kpi-card__delta { display: inline-flex; align-items: center; gap: 4px; font-size: var(--font-size-sm); margin-top: var(--space-xs); color: var(--color-text-muted); }
+.kpi-card__delta--up { color: var(--color-success); }
+.kpi-card__delta--down { color: var(--color-danger); }
+
+/* Variante "hero" (Balance en Dashboard): superficie sólida en vez de blanca, para que el
+   número más importante de la pantalla destaque sin depender solo del tamaño de fuente. */
+.kpi-card--hero { background: var(--color-primary-strong); border-color: var(--color-primary-strong); }
+.kpi-card--hero .kpi-card__label { color: rgba(255, 255, 255, 0.7); }
+.kpi-card--hero .kpi-card__value { color: #fff; }
+.kpi-card--hero .kpi-card__icon { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.kpi-card--hero .kpi-card__delta { color: rgba(255, 255, 255, 0.85); }
+.kpi-card--hero .kpi-card__delta--up, .kpi-card--hero .kpi-card__delta--down { color: #fff; }
+
+/* ---------- Tarjeta de progreso (Presupuesto/Semana/Mes/Mandado — ver
+   js/components/progress-card.js). 3 estados puramente visuales sobre un valor YA calculado
+   por budgetService.js#budgetProgress: normal / warning (≥80% usado) / over (excedido). ---------- */
+.progress-summary-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-lg); }
+.progress-summary-card__header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.progress-summary-card__title { flex: 1 1 auto; font-weight: var(--font-weight-bold); font-size: var(--font-size-card-title); }
+.progress-summary-card__value-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-sm); gap: var(--space-sm); }
+.progress-summary-card__value { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); }
+.progress-summary-card__value--warning { color: var(--color-warning); }
+.progress-summary-card__value--over { color: var(--color-danger); }
+.progress-summary-card__caption { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.progress-summary-card__footnote { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: var(--space-sm); }
+
+.progress-bar__fill--warning { background: var(--color-warning); }
+.kpi-card__icon--warning { background: var(--color-warning-soft); color: var(--color-warning); }
+
+/* ---------- Lista de próximos movimientos (Dashboard) — misma composición visual que se
+   reutilizará para listas de movimientos en otras pantallas en fases futuras. ---------- */
+.movement-list { display: flex; flex-direction: column; }
+/* flex-wrap: red de seguridad — con 3 hijos (Dashboard/Ingresos/Gastos) nunca se activa
+   (ya cabe), pero con el 4to hijo que agrega Calendario (menú ⋮) evita que la descripción
+   quede aplastada a unos pocos px en 320px: amount+menú caen a su propia línea. */
+.movement-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md); padding: var(--space-sm) 0; border-bottom: 1px solid var(--color-border); }
+.movement-row:last-child { border-bottom: none; }
+/* Reutilizado por Calendario con un 4to elemento (menú ⋮, ver calendar.module.js) — no debe
+   comprimirse en filas angostas. */
+.movement-row .action-menu { flex-shrink: 0; }
+.movement-row__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+}
+.movement-row__icon--income { background: var(--color-success-soft); color: var(--color-success); }
+.movement-row__icon--expense { background: var(--color-danger-soft); color: var(--color-danger); }
+/* flex-basis 140px (no 0): con flex-wrap en el padre, esto hace que amount+menú caigan a su
+   propia línea ANTES de que el texto se comprima a unos pocos px, en vez de encogerse hasta
+   casi desaparecer. */
+.movement-row__body { flex: 1 1 140px; min-width: 0; }
+.movement-row__title { font-weight: var(--font-weight-medium); font-size: var(--font-size-md); overflow-wrap: anywhere; }
+.movement-row__subtitle { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: 2px; }
+.movement-row__amount { font-weight: var(--font-weight-bold); font-size: var(--font-size-md); white-space: nowrap; }
+.movement-row__amount--income { color: var(--color-success); }
 
 .progress-bar { background: var(--color-bg); border-radius: 999px; height: 10px; overflow: hidden; }
-.progress-bar__fill { height: 100%; background: var(--color-primary); }
+.progress-bar__fill { height: 100%; background: var(--color-primary); transition: width var(--transition-fast); }
 .progress-bar__fill--over { background: var(--color-danger); }
+
+/* ---------- Mandado: tarjeta de resumen de la lista (rediseño "Minimal Finance") ----------
+   Reemplaza las 4 stat-cards sueltas (Total estimado/Total real/Progreso/Excedido) por una
+   sola tarjeta consolidada — mismos datos de listTotals(), solo reorganizados. */
+.mandado-summary__header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-md); flex-wrap: wrap; }
+.mandado-summary__title { display: flex; align-items: flex-start; gap: var(--space-sm); }
+.mandado-summary__amount { text-align: right; }
+.mandado-summary__amount-value { font-size: var(--font-size-kpi); font-weight: var(--font-weight-bold); }
+.mandado-summary__amount-caption { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.mandado-summary__footrow { display: flex; justify-content: space-between; gap: var(--space-sm); font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: var(--space-sm); flex-wrap: wrap; }
+
+/* ---------- Mandado: grupo por categoría ----------
+   .mandado-category es una .card solo en escritorio (ver override <1024px en
+   css/responsive.css, donde cada .grocery-item-row pasa a ser su propia tarjeta suelta). */
+.mandado-category {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+}
+.mandado-category__header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); flex-wrap: wrap; }
+.mandado-category__title { display: flex; align-items: center; gap: var(--space-sm); }
+.mandado-category__bar { width: 4px; height: 18px; border-radius: 2px; background: var(--color-primary); flex-shrink: 0; }
+.mandado-category__total { font-weight: var(--font-weight-bold); }
 
 .comparison-list { display: flex; flex-direction: column; gap: var(--space-sm); }
 .comparison-list li { display: flex; justify-content: space-between; gap: var(--space-sm); font-size: var(--font-size-sm); }
@@ -324,22 +450,30 @@
 .calendar-day:hover { border-color: var(--color-primary); }
 .calendar-day--outside { color: var(--color-text-muted); background: var(--color-bg); }
 .calendar-day--today { border-color: var(--color-primary); border-width: 2px; }
-.calendar-day--selected { background: var(--color-sidebar-active-bg); color: #fff; border-color: var(--color-sidebar-active-bg); }
+/* var(--color-primary) directo, no var(--color-sidebar-active-bg): ese token ahora es un
+   tinte claro (sidebar rediseñado, ver css/variables.css) — reusarlo aquí dejaría texto
+   blanco sobre fondo claro, ilegible. El día seleccionado necesita su propio fondo sólido. */
+.calendar-day--selected { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 .calendar-day--selected .calendar-day__number { color: #fff; }
 
 .calendar-day__number { font-size: var(--font-size-sm); font-weight: 600; }
 .calendar-day__badges { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
 
 .calendar-badge {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.65rem;
   line-height: 1;
   padding: 1px 4px;
   border-radius: 999px;
   background: var(--color-bg);
 }
-.calendar-badge--income { background: rgba(31, 157, 85, 0.15); }
-.calendar-badge--expense { background: rgba(214, 69, 69, 0.15); }
-.calendar-badge--mandado { background: rgba(214, 158, 46, 0.2); }
+/* display:inline-flex + gap: el ícono SVG (.icon es display:block) y el conteo numérico
+   quedan lado a lado en vez de que el ícono "rompa" a su propia línea dentro del pill. */
+.calendar-badge__label { display: inline-flex; align-items: center; gap: 2px; }
+.calendar-badge--income { background: var(--color-success-soft); color: var(--color-success); }
+.calendar-badge--expense { background: var(--color-danger-soft); color: var(--color-danger); }
+.calendar-badge--mandado { background: var(--color-warning-soft); color: var(--color-warning); }
 
 .grocery-item-list { display: flex; flex-direction: column; }
 
@@ -403,6 +537,7 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--color-text);
+  transition: background var(--transition-fast);
 }
 .action-menu__toggle:hover { background: var(--color-bg); }
 /* position:fixed (no absolute) con top/left calculados en JS (ver js/components/action-menu.js):
@@ -432,6 +567,7 @@
   font-size: var(--font-size-sm);
   color: var(--color-text);
   cursor: pointer;
+  transition: background var(--transition-fast);
 }
 .action-menu__item:hover { background: var(--color-bg); }
 .action-menu__item--danger { color: var(--color-danger); }
@@ -448,3 +584,64 @@
   font-size: var(--font-size-sm);
 }
 .comparison-product-item--best { border-color: var(--color-success); background: var(--color-success-soft); }
+
+/* ---------- Comparador: callout de ganador (rediseño "Minimal Finance" — el usuario no
+   debería tener que comparar columnas a mano, ver js/modules/price-comparison/comparison.module.js) ---------- */
+.compare-winner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  background: var(--color-success-soft);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+.compare-winner .badge { margin-bottom: 4px; }
+.compare-winner__store { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); }
+.compare-winner__price { text-align: right; }
+.compare-winner__price-value { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); }
+.compare-winner__price-note { font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+
+summary { cursor: pointer; color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+
+/* ---------- Configuración: lista de ajustes agrupada (rediseño "Minimal Finance" — ver
+   js/modules/settings/settings.module.js). Evita que cada ajuste sea su propia card grande. ---------- */
+.settings-section__title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0 var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+.settings-list {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-md);
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.settings-list > .settings-row:last-child,
+.settings-list > *:last-child .settings-row { border-bottom: none; }
+.settings-row--action { cursor: pointer; transition: background var(--transition-fast); }
+.settings-row--action:hover { background: var(--color-bg); }
+.settings-row__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.settings-row__title { font-weight: var(--font-weight-medium); }
+.settings-row__title--danger { color: var(--color-danger); }
+.settings-row__subtitle { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.settings-row__chevron { color: var(--color-text-muted); flex-shrink: 0; display: flex; }

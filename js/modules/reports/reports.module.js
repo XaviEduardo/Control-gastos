@@ -8,7 +8,7 @@ import ProductRepository from '../grocery/product.repository.js';
 import GroceryListRepository from '../grocery/grocery-list.repository.js';
 import StoreRepository from '../stores/store.repository.js';
 import {
-  totalIncome, totalExpenses, mandadoTotal, expensesByCategory, incomeByType, getPeriodRange,
+  totalIncome, totalExpenses, mandadoTotal, expensesByCategory, incomeByType, getPeriodRange, previousPeriod,
 } from '../../services/financeService.js';
 import { itemsForList, itemEffectiveSubtotal } from '../../services/groceryService.js';
 import { compareProductAcrossStores, compareListAcrossStores } from '../../services/comparisonService.js';
@@ -17,13 +17,13 @@ import PriceRepository from '../prices/price.repository.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { renderStatCard } from '../../components/stat-card.js';
 import { renderMonthYearNav } from '../../components/month-year-nav.js';
-import { formatMoney } from '../../core/currency.js';
+import { formatMoney, kpiDelta } from '../../core/currency.js';
 import {
   MONTH_NAMES, startOfWeek, toISODate, parseFlexibleDate, formatDateShort,
 } from '../../core/dates.js';
 import { escapeHtml } from '../../core/validators.js';
 
-const CHART_COLORS = ['#2f6fed', '#1f9d55', '#d69e2e', '#d64545', '#6b7280', '#0ea5e9', '#a855f7', '#f97316'];
+const CHART_COLORS = ['#4F46E5', '#17A567', '#C98A1E', '#DC4949', '#6b7280', '#0ea5e9', '#a855f7', '#f97316'];
 const PERIOD_LABELS = { week: 'Semana', month: 'Mes', year: 'Año' };
 
 export function renderReportsModule(container) {
@@ -63,15 +63,28 @@ export function renderReportsModule(container) {
   function chartCard(title) {
     const card = document.createElement('div');
     card.className = 'card chart-card';
-    card.innerHTML = `<div class="summary-card__label mb-md">${title}</div><div class="chart-wrapper"><canvas></canvas></div>`;
+    card.innerHTML = `<div class="card-title mb-md">${title}</div><div class="chart-wrapper"><canvas></canvas></div>`;
     return card;
   }
 
   function noDataCard(title, message) {
     const card = document.createElement('div');
     card.className = 'card chart-card';
-    card.innerHTML = `<div class="summary-card__label mb-md">${title}</div><p class="text-muted">${message}</p>`;
+    card.innerHTML = `<div class="card-title mb-md">${title}</div><p class="text-muted">${message}</p>`;
     return card;
+  }
+
+  // Dashboard = estado actual; Reportes = análisis histórico (ver rediseño PASS 5) — mismo
+  // encabezado que Dashboard/Calendario/Configuración para que se sienta el mismo producto,
+  // pero con su propio subtítulo.
+  function renderHeader() {
+    const wrap = document.createElement('div');
+    wrap.className = 'dashboard-header mb-md';
+    wrap.innerHTML = `
+      <div class="dashboard-header__eyebrow">Reportes</div>
+      <h2 class="dashboard-header__title">Análisis histórico</h2>
+    `;
+    return wrap;
   }
 
   function render() {
@@ -90,6 +103,7 @@ export function renderReportsModule(container) {
 
     const period = currentPeriod();
 
+    root.appendChild(renderHeader());
     root.appendChild(renderPeriodSelector());
     root.appendChild(renderSummary(period));
 
@@ -156,13 +170,22 @@ export function renderReportsModule(container) {
     const income = totalIncome(period);
     const expense = totalExpenses(period);
     const mandado = mandadoTotal(period);
+    const prev = previousPeriod(period);
+    const deltaLabel = `vs ${PERIOD_LABELS[period.type].toLowerCase()} anterior`;
 
     const grid = document.createElement('div');
     grid.className = 'stats-grid mb-md';
-    grid.appendChild(renderStatCard('Ingresos', formatMoney(income)));
-    grid.appendChild(renderStatCard('Gastos', formatMoney(expense)));
-    grid.appendChild(renderStatCard('Balance', formatMoney(income - expense), { tone: income - expense < 0 ? 'negative' : 'positive' }));
-    if (mandado !== null) grid.appendChild(renderStatCard('Mandado', formatMoney(mandado)));
+    grid.appendChild(renderStatCard('Ingresos', formatMoney(income), {
+      icon: 'trending-up', iconTone: 'success', delta: kpiDelta(income, totalIncome(prev), { label: deltaLabel }),
+    }));
+    grid.appendChild(renderStatCard('Gastos', formatMoney(expense), {
+      icon: 'trending-down', iconTone: 'danger', delta: kpiDelta(expense, totalExpenses(prev), { invert: true, label: deltaLabel }),
+    }));
+    grid.appendChild(renderStatCard('Balance', formatMoney(income - expense), {
+      icon: 'bank', hero: true,
+      delta: kpiDelta(income - expense, totalIncome(prev) - totalExpenses(prev), { label: deltaLabel }),
+    }));
+    if (mandado !== null) grid.appendChild(renderStatCard('Mandado', formatMoney(mandado), { icon: 'cart' }));
     return grid;
   }
 
@@ -284,7 +307,7 @@ export function renderReportsModule(container) {
   function renderTopProducts(period) {
     const card = document.createElement('div');
     card.className = 'card mb-md';
-    card.innerHTML = '<div class="summary-card__label mb-md">Principales productos del mandado (este periodo)</div>';
+    card.innerHTML = '<div class="card-title mb-md">Principales productos del mandado (este periodo)</div>';
 
     const entries = topProducts(period);
     if (!entries.length) {
@@ -318,7 +341,7 @@ export function renderReportsModule(container) {
     const header = document.createElement('div');
     header.className = 'flex justify-between items-center gap-sm mb-md';
     header.style.flexWrap = 'wrap';
-    header.innerHTML = '<div class="summary-card__label">Evolución de precios</div>';
+    header.innerHTML = '<div class="card-title">Evolución de precios</div>';
     wrap.appendChild(header);
 
     if (!products.length) {
@@ -426,7 +449,7 @@ export function renderReportsModule(container) {
   function renderCheapestStores() {
     const card = document.createElement('div');
     card.className = 'card mb-md';
-    card.innerHTML = '<div class="summary-card__label mb-md">Tiendas más económicas</div>';
+    card.innerHTML = '<div class="card-title mb-md">Tiendas más económicas</div>';
 
     const { ranked, comparableProducts } = cheapestStores();
     if (!comparableProducts) {
@@ -459,7 +482,7 @@ export function renderReportsModule(container) {
   function renderSavingsSection(period) {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = '<div class="summary-card__label mb-md">Ahorro potencial (comparador de precios)</div>';
+    card.innerHTML = '<div class="card-title mb-md">Ahorro potencial (comparador de precios)</div>';
 
     const lists = listsInPeriod(period);
     if (!lists.length) {
