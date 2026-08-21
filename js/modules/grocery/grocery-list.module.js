@@ -51,6 +51,7 @@ export function renderGroceryListModule(container) {
     const lists = currentLists();
     ensureSelection(lists);
 
+    root.appendChild(renderHeader());
     root.appendChild(renderListSelector(lists));
 
     if (!selectedListId) {
@@ -67,6 +68,16 @@ export function renderGroceryListModule(container) {
     const list = GroceryListRepository.getById(selectedListId);
     root.appendChild(renderTotalsSummary(list));
     root.appendChild(renderItemsByCategory(list));
+  }
+
+  function renderHeader() {
+    const wrap = document.createElement('div');
+    wrap.className = 'dashboard-header mb-md';
+    wrap.innerHTML = `
+      <div class="dashboard-header__eyebrow">Mandado</div>
+      <h2 class="dashboard-header__title">Mi Lista</h2>
+    `;
+    return wrap;
   }
 
   function renderListSelector(lists) {
@@ -206,7 +217,7 @@ export function renderGroceryListModule(container) {
 
     const linkedExpense = list.linkedExpenseId ? ExpenseRepository.getById(list.linkedExpenseId) : null;
     const label = document.createElement('div');
-    label.className = 'summary-card__label mb-md';
+    label.className = 'card-title mb-md';
     label.textContent = 'Integración con Gastos';
     card.appendChild(label);
 

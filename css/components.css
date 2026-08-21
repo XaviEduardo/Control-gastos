@@ -257,7 +257,8 @@
   border-bottom: 1px solid var(--color-border);
   flex-wrap: wrap;
 }
-.category-manager-item > span:last-child { flex-wrap: wrap; }
+/* Nombre + conteo opcional (ej. "12 productos", ver itemCount en category-manager.js) */
+.category-manager-item__name { display: flex; flex-direction: column; gap: 2px; }
 
 .period-nav {
   display: flex;
@@ -332,20 +333,33 @@
 .kpi-card--hero .kpi-card__delta { color: rgba(255, 255, 255, 0.85); }
 .kpi-card--hero .kpi-card__delta--up, .kpi-card--hero .kpi-card__delta--down { color: #fff; }
 
-/* ---------- Tarjeta de progreso (Presupuesto/Mandado en Dashboard) ---------- */
+/* ---------- Tarjeta de progreso (Presupuesto/Semana/Mes/Mandado — ver
+   js/components/progress-card.js). 3 estados puramente visuales sobre un valor YA calculado
+   por budgetService.js#budgetProgress: normal / warning (≥80% usado) / over (excedido). ---------- */
 .progress-summary-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-lg); }
-.progress-summary-card__header { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
-.progress-summary-card__title { font-weight: var(--font-weight-bold); font-size: var(--font-size-card-title); }
+.progress-summary-card__header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.progress-summary-card__title { flex: 1 1 auto; font-weight: var(--font-weight-bold); font-size: var(--font-size-card-title); }
 .progress-summary-card__value-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-sm); gap: var(--space-sm); }
 .progress-summary-card__value { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); }
+.progress-summary-card__value--warning { color: var(--color-warning); }
+.progress-summary-card__value--over { color: var(--color-danger); }
 .progress-summary-card__caption { font-size: var(--font-size-sm); color: var(--color-text-muted); }
 .progress-summary-card__footnote { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: var(--space-sm); }
+
+.progress-bar__fill--warning { background: var(--color-warning); }
+.kpi-card__icon--warning { background: var(--color-warning-soft); color: var(--color-warning); }
 
 /* ---------- Lista de próximos movimientos (Dashboard) — misma composición visual que se
    reutilizará para listas de movimientos en otras pantallas en fases futuras. ---------- */
 .movement-list { display: flex; flex-direction: column; }
-.movement-row { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-sm) 0; border-bottom: 1px solid var(--color-border); }
+/* flex-wrap: red de seguridad — con 3 hijos (Dashboard/Ingresos/Gastos) nunca se activa
+   (ya cabe), pero con el 4to hijo que agrega Calendario (menú ⋮) evita que la descripción
+   quede aplastada a unos pocos px en 320px: amount+menú caen a su propia línea. */
+.movement-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md); padding: var(--space-sm) 0; border-bottom: 1px solid var(--color-border); }
 .movement-row:last-child { border-bottom: none; }
+/* Reutilizado por Calendario con un 4to elemento (menú ⋮, ver calendar.module.js) — no debe
+   comprimirse en filas angostas. */
+.movement-row .action-menu { flex-shrink: 0; }
 .movement-row__icon {
   width: 40px;
   height: 40px;
@@ -359,7 +373,10 @@
 }
 .movement-row__icon--income { background: var(--color-success-soft); color: var(--color-success); }
 .movement-row__icon--expense { background: var(--color-danger-soft); color: var(--color-danger); }
-.movement-row__body { flex: 1 1 auto; min-width: 0; }
+/* flex-basis 140px (no 0): con flex-wrap en el padre, esto hace que amount+menú caigan a su
+   propia línea ANTES de que el texto se comprima a unos pocos px, en vez de encogerse hasta
+   casi desaparecer. */
+.movement-row__body { flex: 1 1 140px; min-width: 0; }
 .movement-row__title { font-weight: var(--font-weight-medium); font-size: var(--font-size-md); overflow-wrap: anywhere; }
 .movement-row__subtitle { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: 2px; }
 .movement-row__amount { font-weight: var(--font-weight-bold); font-size: var(--font-size-md); white-space: nowrap; }
@@ -442,15 +459,20 @@
 .calendar-day__badges { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
 
 .calendar-badge {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.65rem;
   line-height: 1;
   padding: 1px 4px;
   border-radius: 999px;
   background: var(--color-bg);
 }
-.calendar-badge--income { background: rgba(31, 157, 85, 0.15); }
-.calendar-badge--expense { background: rgba(214, 69, 69, 0.15); }
-.calendar-badge--mandado { background: rgba(214, 158, 46, 0.2); }
+/* display:inline-flex + gap: el ícono SVG (.icon es display:block) y el conteo numérico
+   quedan lado a lado en vez de que el ícono "rompa" a su propia línea dentro del pill. */
+.calendar-badge__label { display: inline-flex; align-items: center; gap: 2px; }
+.calendar-badge--income { background: var(--color-success-soft); color: var(--color-success); }
+.calendar-badge--expense { background: var(--color-danger-soft); color: var(--color-danger); }
+.calendar-badge--mandado { background: var(--color-warning-soft); color: var(--color-warning); }
 
 .grocery-item-list { display: flex; flex-direction: column; }
 
@@ -559,3 +581,64 @@
   font-size: var(--font-size-sm);
 }
 .comparison-product-item--best { border-color: var(--color-success); background: var(--color-success-soft); }
+
+/* ---------- Comparador: callout de ganador (rediseño "Minimal Finance" — el usuario no
+   debería tener que comparar columnas a mano, ver js/modules/price-comparison/comparison.module.js) ---------- */
+.compare-winner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  background: var(--color-success-soft);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+.compare-winner .badge { margin-bottom: 4px; }
+.compare-winner__store { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); }
+.compare-winner__price { text-align: right; }
+.compare-winner__price-value { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); }
+.compare-winner__price-note { font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+
+summary { cursor: pointer; color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+
+/* ---------- Configuración: lista de ajustes agrupada (rediseño "Minimal Finance" — ver
+   js/modules/settings/settings.module.js). Evita que cada ajuste sea su propia card grande. ---------- */
+.settings-section__title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0 var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+.settings-list {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-md);
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.settings-list > .settings-row:last-child,
+.settings-list > *:last-child .settings-row { border-bottom: none; }
+.settings-row--action { cursor: pointer; }
+.settings-row--action:hover { background: var(--color-bg); }
+.settings-row__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.settings-row__title { font-weight: var(--font-weight-medium); }
+.settings-row__title--danger { color: var(--color-danger); }
+.settings-row__subtitle { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.settings-row__chevron { color: var(--color-text-muted); flex-shrink: 0; display: flex; }

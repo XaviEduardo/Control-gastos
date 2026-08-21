@@ -1,4 +1,5 @@
 import ProductRepository from './product.repository.js';
+import PriceRepository from '../prices/price.repository.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import { renderTable } from '../../components/table.js';
 import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
@@ -6,10 +7,14 @@ import { renderEmptyState } from '../../components/empty-state.js';
 import { openModal } from '../../components/modal.js';
 import { openCategoryManager } from '../../components/category-manager.js';
 import { showToast } from '../../components/toast.js';
+import { normalizePrice, formatNormalizedPrice } from '../../services/priceService.js';
+import { parseFlexibleDate } from '../../core/dates.js';
 import { isRequired, validate, escapeHtml } from '../../core/validators.js';
 import { UNIT_OPTIONS } from './units.js';
 
 const categoryRepo = createCategoryRepository('groceryCategories');
+
+const UNIT_PHRASES = { kg: 'Por kg', g: 'Por gramo', l: 'Por litro', ml: 'Por mililitro', pza: 'Por unidad', paquete: 'Por paquete' };
 
 export function renderGroceryProductsModule(container) {
   ensureActionMenuOutsideClick();
@@ -21,6 +26,19 @@ export function renderGroceryProductsModule(container) {
   const activeCategories = () => categoryRepo.list({ includeInactive: false });
   const categoryName = (id) => categoryRepo.list().find((c) => c.id === id)?.name || 'Sin categoría';
   const unitLabel = (value) => UNIT_OPTIONS.find((u) => u.value === value)?.label || value;
+  const unitPhrase = (value) => UNIT_PHRASES[value] || `Por ${unitLabel(value)}`;
+
+  // Precio más reciente registrado para el producto (cualquier tienda) — mismo patrón que
+  // ya usa price-history.module.js (encontrar el registro más nuevo por fecha), sin tocar
+  // ninguna regla de cálculo. null si nunca se ha registrado un precio.
+  function latestPriceInfo(productId) {
+    const entries = PriceRepository.forProduct(productId);
+    if (!entries.length) return null;
+    const latest = entries.reduce((best, e) => (
+      !best || parseFlexibleDate(e.date) > parseFlexibleDate(best.date) ? e : best
+    ), null);
+    return { entry: latest, normalized: normalizePrice(latest.price, latest.quantity, latest.unit) };
+  }
 
   function filteredProducts() {
     const term = view.search.trim().toLowerCase();
@@ -32,7 +50,17 @@ export function renderGroceryProductsModule(container) {
 
   function render() {
     root.innerHTML = '';
-    root.append(renderToolbar(), renderListSection());
+    root.append(renderHeader(), renderToolbar(), renderListSection());
+  }
+
+  function renderHeader() {
+    const wrap = document.createElement('div');
+    wrap.className = 'dashboard-header mb-md';
+    wrap.innerHTML = `
+      <div class="dashboard-header__eyebrow">Mandado</div>
+      <h2 class="dashboard-header__title">Productos</h2>
+    `;
+    return wrap;
   }
 
   function renderToolbar() {
@@ -100,13 +128,28 @@ export function renderGroceryProductsModule(container) {
       columns: [
         { key: 'name', label: 'Producto' },
         { key: 'categoryId', label: 'Categoría', render: (row) => escapeHtml(categoryName(row.categoryId)) },
-        { key: 'preferredUnit', label: 'Unidad', render: (row) => escapeHtml(unitLabel(row.preferredUnit)) },
-        { key: 'status', label: 'Estado', render: (row) => (row.status === 'active' ? 'Activo' : 'Inactivo') },
+        { key: 'preferredUnit', label: 'Presentación', render: (row) => escapeHtml(unitPhrase(row.preferredUnit)) },
+        {
+          key: 'lastPrice',
+          label: 'Último precio',
+          align: 'right',
+          render: (row) => {
+            const info = latestPriceInfo(row.id);
+            return info?.normalized ? escapeHtml(formatNormalizedPrice(info.normalized)) : '<span class="text-muted">Sin registrar</span>';
+          },
+        },
+        { key: 'status', label: 'Estado', render: (row) => statusBadge(row.status) },
       ],
       rows: products,
       rowActions: (row) => buildRowActions(row),
       renderCard: (row, actions) => renderProductCard(row, actions),
     });
+  }
+
+  function statusBadge(status) {
+    return status === 'active'
+      ? '<span class="badge badge--success">Activo</span>'
+      : '<span class="badge badge--neutral">Inactivo</span>';
   }
 
   function buildRowActions(row) {
@@ -136,11 +179,27 @@ export function renderGroceryProductsModule(container) {
 
     const subtitle = document.createElement('div');
     subtitle.className = 'responsive-card-list__subtitle';
-    subtitle.textContent = `${categoryName(row.categoryId)} · ${row.status === 'active' ? 'Activo' : 'Inactivo'}`;
+    subtitle.textContent = categoryName(row.categoryId);
 
     const body = document.createElement('div');
     body.className = 'responsive-card-list__body';
-    body.innerHTML = `<span>Unidad preferida: ${escapeHtml(unitLabel(row.preferredUnit))}</span>`;
+
+    const unitLine = document.createElement('span');
+    unitLine.textContent = unitPhrase(row.preferredUnit);
+    body.appendChild(unitLine);
+
+    const priceRow = document.createElement('div');
+    priceRow.className = 'flex justify-between items-center mt-md';
+    const info = latestPriceInfo(row.id);
+    priceRow.innerHTML = info?.normalized
+      ? `<span class="text-muted">Último precio</span><span style="font-weight:700">${escapeHtml(formatNormalizedPrice(info.normalized))}</span>`
+      : '<span class="text-muted">Sin precio registrado</span>';
+    body.appendChild(priceRow);
+
+    const statusRow = document.createElement('div');
+    statusRow.className = 'mt-md';
+    statusRow.innerHTML = statusBadge(row.status);
+    body.appendChild(statusRow);
 
     card.append(header, subtitle, body);
     return card;

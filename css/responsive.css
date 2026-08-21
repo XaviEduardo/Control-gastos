@@ -34,6 +34,28 @@
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
   }
+
+  /* Calendario: los badges de conteo (ícono SVG + dígito) se simplifican a puntos de color
+     sólido desde tablet, no solo mobile — con sidebar de tablet (220px) + padding de
+     .app-content/.card, el interior real de una celda en el rango 640-941px (incluye 768px,
+     viewport de alta prioridad) no alcanza para 3 badges en una línea sin forzar 2 líneas
+     dentro de la celda de altura fija (aspect-ratio:1/1) — mismo tipo de bug de overflow que
+     .grocery-item-row arriba, mismo fix: extender el breakpoint hasta donde de verdad hay
+     espacio. El detalle completo sigue disponible en el panel del día seleccionado. */
+  .calendar-grid { gap: 2px; }
+  .calendar-day { padding: 2px 1px; }
+  .calendar-day__badges { gap: 3px; }
+  .calendar-badge__label { display: none; }
+  .calendar-badge {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .calendar-badge--income { background: var(--color-success); }
+  .calendar-badge--expense { background: var(--color-danger); }
+  .calendar-badge--mandado { background: var(--color-warning); }
 }
 
 /* Mobile (< 640px, estrategia documentada en docs/responsive-plan.md): sidebar = drawer.
@@ -76,26 +98,10 @@
      responsive:true redibuja solo al cruzar este breakpoint, sin instancias nuevas). */
   .chart-wrapper { height: 220px; }
 
-  /* Calendario: en <640px los badges de conteo (💰🧾🛒) se simplifican a puntos de color
-     sólido — con 3 badges de texto la celda (7 columnas en 320-360px) puede desbordar o
-     volverse ilegible. El detalle completo (montos, categorías) sigue disponible en el
-     panel del día seleccionado (ver docs/ui-ux-audit.md sección G). El número del día NO
-     se reduce (debe seguir siendo legible). */
-  .calendar-grid { gap: 2px; }
-  .calendar-day { padding: 2px 1px; }
+  /* Calendario: el número del día NO se reduce (debe seguir siendo legible) — la
+     simplificación de badges a puntos ya vive en el bloque <1024px de arriba, junto con el
+     gap/padding de la celda. Aquí solo queda lo estrictamente <640px. */
   .calendar-weekday { font-size: 0.7rem; }
-  .calendar-day__badges { gap: 3px; }
-  .calendar-badge__label { display: none; }
-  .calendar-badge {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    padding: 0;
-    border-radius: 50%;
-  }
-  .calendar-badge--income { background: var(--color-success); }
-  .calendar-badge--expense { background: var(--color-danger); }
-  .calendar-badge--mandado { background: var(--color-warning); }
 
   /* Formularios largos: casi pantalla completa (ver docs/ui-ux-audit.md sección G). El
      margen que deja .modal-overlay (var(--space-md), sin cambio) evita que quede pegado al

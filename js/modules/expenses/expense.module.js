@@ -3,15 +3,17 @@ import { createCategoryRepository } from '../shared/category-repository.js';
 import { renderTable } from '../../components/table.js';
 import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { renderEmptyState } from '../../components/empty-state.js';
+import { iconMarkup } from '../../components/icons.js';
 import { openModal } from '../../components/modal.js';
 import { openCategoryManager } from '../../components/category-manager.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
-import { formatMoney } from '../../core/currency.js';
+import { renderStatCard } from '../../components/stat-card.js';
+import { formatMoney, kpiDelta } from '../../core/currency.js';
 import { formatDateShort, toISODate, parseFlexibleDate } from '../../core/dates.js';
 import { isRequired, isPositiveNumber, isValidDate, validate, escapeHtml } from '../../core/validators.js';
 import { FREQUENCY_OPTIONS, frequencyLabel } from '../../services/recurrenceService.js';
-import { totalExpenses, expensesByCategory } from '../../services/financeService.js';
+import { totalExpenses, expensesByCategory, previousPeriod } from '../../services/financeService.js';
 
 const categoryRepo = createCategoryRepository('expenseCategories');
 
@@ -35,31 +37,44 @@ export function renderExpenseModule(container) {
 
   function render() {
     root.innerHTML = '';
-    root.append(renderSummary(), renderToolbar(), renderListSection());
+    root.append(renderHeader(), renderSummary(), renderToolbar(), renderListSection());
+  }
+
+  function renderHeader() {
+    const wrap = document.createElement('div');
+    wrap.className = 'dashboard-header mb-md';
+    wrap.innerHTML = `
+      <div class="dashboard-header__eyebrow">Finanzas</div>
+      <h2 class="dashboard-header__title">Gastos</h2>
+    `;
+    return wrap;
   }
 
   function renderSummary() {
     const wrap = document.createElement('div');
-    wrap.className = 'flex gap-md mb-md';
-    wrap.style.flexWrap = 'wrap';
 
-    const total = document.createElement('div');
-    total.className = 'card';
-    total.style.flex = '1 1 200px';
-    total.innerHTML = `
-      <div class="summary-card__label">Gastos de este mes</div>
-      <div class="summary-card__value">${formatMoney(totalExpenses({ type: 'month', date: new Date() }))}</div>
-    `;
+    const period = { type: 'month', date: new Date() };
+    const prev = previousPeriod(period);
+    const total = totalExpenses(period);
+    const prevTotal = totalExpenses(prev);
+
+    const grid = document.createElement('div');
+    grid.className = 'stats-grid mb-md';
+    grid.appendChild(renderStatCard('Gastos del mes', formatMoney(total), {
+      icon: 'trending-down',
+      iconTone: 'danger',
+      delta: kpiDelta(total, prevTotal, { invert: true, label: 'vs mes anterior' }),
+    }));
+    wrap.appendChild(grid);
 
     const breakdown = document.createElement('div');
-    breakdown.className = 'card';
-    breakdown.style.flex = '2 1 320px';
-    const rows = expensesByCategory({ type: 'month', date: new Date() })
+    breakdown.className = 'card mb-md';
+    const rows = expensesByCategory(period)
       .map(({ category, total: t }) => `<li><span>${escapeHtml(category.name)}</span><span>${formatMoney(t)}</span></li>`)
       .join('');
-    breakdown.innerHTML = `<div class="summary-card__label mb-md">Gastos por categoría (este mes)</div><ul class="breakdown-list">${rows || '<li class="text-muted">Sin datos todavía.</li>'}</ul>`;
+    breakdown.innerHTML = `<div class="card-title mb-md">Gastos por categoría (este mes)</div><ul class="breakdown-list">${rows || '<li class="text-muted">Sin datos todavía.</li>'}</ul>`;
+    wrap.appendChild(breakdown);
 
-    wrap.append(total, breakdown);
     return wrap;
   }
 
@@ -136,7 +151,7 @@ export function renderExpenseModule(container) {
         { key: 'description', label: 'Concepto' },
         { key: 'categoryId', label: 'Categoría', render: (row) => escapeHtml(categoryName(row.categoryId)) },
         { key: 'frequency', label: 'Recurrencia', render: (row) => escapeHtml(frequencyLabel(row.frequency)) },
-        { key: 'amount', label: 'Cantidad', render: (row) => formatMoney(row.amount) },
+        { key: 'amount', label: 'Cantidad', align: 'right', render: (row) => formatMoney(row.amount) },
       ],
       rows: expenses,
       rowActions: (row) => buildRowActions(row),
@@ -175,31 +190,39 @@ export function renderExpenseModule(container) {
     ]);
   }
 
+  // Mismo lenguaje visual que "Próximos movimientos" del Dashboard (icono + cuerpo + monto,
+  // ver .movement-row* en css/components.css) — aquí dentro de la tarjeta individual ya
+  // construida por table.js (.responsive-card-list__item conserva su borde/sombra propios).
   function renderExpenseCard(row, actions) {
     const card = document.createElement('div');
     card.className = 'responsive-card-list__item';
 
-    const header = document.createElement('div');
-    header.className = 'responsive-card-list__header';
-    const title = document.createElement('span');
-    title.className = 'responsive-card-list__title';
-    title.textContent = row.description;
-    const amount = document.createElement('span');
-    amount.className = 'responsive-card-list__amount';
-    amount.textContent = formatMoney(row.amount);
-    header.append(title, amount);
+    const content = document.createElement('div');
+    content.className = 'flex items-center gap-md';
 
-    const subtitle = document.createElement('div');
-    subtitle.className = 'responsive-card-list__subtitle';
-    subtitle.textContent = `${categoryName(row.categoryId)} · ${formatDateShort(row.date)}`;
+    const icon = document.createElement('span');
+    icon.className = 'movement-row__icon movement-row__icon--expense';
+    icon.innerHTML = iconMarkup('trending-down', { size: 18 });
+
+    const body = document.createElement('div');
+    body.className = 'movement-row__body';
+    body.innerHTML = `
+      <div class="movement-row__title">${escapeHtml(row.description)}</div>
+      <div class="movement-row__subtitle">${escapeHtml(categoryName(row.categoryId))} · ${formatDateShort(row.date)}</div>
+    `;
+
+    const amount = document.createElement('span');
+    amount.className = 'movement-row__amount';
+    amount.textContent = `-${formatMoney(row.amount)}`;
+
+    content.append(icon, body, amount);
 
     const footer = document.createElement('div');
-    footer.className = 'responsive-card-list__body';
-    footer.style.flexDirection = 'row';
+    footer.className = 'flex mt-md';
     footer.style.justifyContent = 'flex-end';
     footer.appendChild(actions);
 
-    card.append(header, subtitle, footer);
+    card.append(content, footer);
     return card;
   }
 

@@ -1,11 +1,16 @@
 import { openModal } from './modal.js';
 import { showToast } from './toast.js';
+import { createActionMenu, ensureActionMenuOutsideClick } from './action-menu.js';
 import { isRequired } from '../core/validators.js';
 
 /** Contenido reutilizable de administración de categorías/tipos (agregar, renombrar,
  * activar/desactivar). Se puede montar dentro de un modal (openCategoryManager) o
- * directamente en una página completa (ej. /mandado/categorias). */
-export function renderCategoryManagerContent({ repository, onChange }) {
+ * directamente en una página completa (ej. /mandado/categorias).
+ * `itemCount` opcional: (category) => string — texto de conteo por ítem (ej. "12 productos").
+ * Si no se pasa, no se muestra nada extra (así los consumidores existentes — Ingresos,
+ * Gastos, Productos — no cambian de aspecto). */
+export function renderCategoryManagerContent({ repository, onChange, itemCount }) {
+  ensureActionMenuOutsideClick();
   const wrapper = document.createElement('div');
 
   function renderList() {
@@ -35,38 +40,42 @@ export function renderCategoryManagerContent({ repository, onChange }) {
       const li = document.createElement('li');
       li.className = 'category-manager-item';
 
+      const nameWrap = document.createElement('span');
+      nameWrap.className = 'category-manager-item__name';
       const nameSpan = document.createElement('span');
       nameSpan.textContent = item.name;
       if (item.status !== 'active') nameSpan.classList.add('text-muted');
+      nameWrap.appendChild(nameSpan);
+      if (itemCount) {
+        const countSpan = document.createElement('span');
+        countSpan.className = 'text-muted text-xs';
+        countSpan.textContent = itemCount(item);
+        nameWrap.appendChild(countSpan);
+      }
 
-      const actions = document.createElement('span');
-      actions.className = 'flex gap-xs';
+      const menu = createActionMenu(`Más acciones para ${item.name}`, [
+        {
+          label: 'Renombrar',
+          onClick: () => {
+            const newName = window.prompt('Nuevo nombre', item.name);
+            if (newName && isRequired(newName)) {
+              repository.update(item.id, { name: newName });
+              renderList();
+              onChange?.();
+            }
+          },
+        },
+        {
+          label: item.status === 'active' ? 'Desactivar' : 'Activar',
+          onClick: () => {
+            repository.setStatus(item.id, item.status === 'active' ? 'inactive' : 'active');
+            renderList();
+            onChange?.();
+          },
+        },
+      ]);
 
-      const renameBtn = document.createElement('button');
-      renameBtn.type = 'button';
-      renameBtn.className = 'btn btn--ghost';
-      renameBtn.textContent = 'Renombrar';
-      renameBtn.addEventListener('click', () => {
-        const newName = window.prompt('Nuevo nombre', item.name);
-        if (newName && isRequired(newName)) {
-          repository.update(item.id, { name: newName });
-          renderList();
-          onChange?.();
-        }
-      });
-
-      const toggleBtn = document.createElement('button');
-      toggleBtn.type = 'button';
-      toggleBtn.className = 'btn btn--ghost';
-      toggleBtn.textContent = item.status === 'active' ? 'Desactivar' : 'Activar';
-      toggleBtn.addEventListener('click', () => {
-        repository.setStatus(item.id, item.status === 'active' ? 'inactive' : 'active');
-        renderList();
-        onChange?.();
-      });
-
-      actions.append(renameBtn, toggleBtn);
-      li.append(nameSpan, actions);
+      li.append(nameWrap, menu);
       list.appendChild(li);
     });
 

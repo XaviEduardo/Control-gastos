@@ -10,7 +10,8 @@ import { renderMonthYearNav } from '../../components/month-year-nav.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { iconMarkup } from '../../components/icons.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
-import { formatMoney, formatDeltaParts, formatPercent } from '../../core/currency.js';
+import { formatMoney, kpiDelta } from '../../core/currency.js';
+import { renderProgressCard } from '../../components/progress-card.js';
 import {
   MONTH_NAMES, startOfMonth, endOfMonth, startOfWeek, toISODate, formatDateShort,
 } from '../../core/dates.js';
@@ -67,16 +68,6 @@ export function renderDashboardModule(container) {
     return card;
   }
 
-  // Delta con tono explícito: la dirección numérica (up/down) decide la flecha, pero el color
-  // lo decide si esa dirección es buena o mala PARA ESA métrica (invert:true para Gastos, donde
-  // subir es negativo) — ver js/components/stat-card.js.
-  function kpiDelta(current, previous, { invert = false } = {}) {
-    const parts = formatDeltaParts(current, previous);
-    if (parts.direction === 'flat' || parts.direction === 'new') return { ...parts, text: `${parts.text} vs mes anterior` };
-    const goodDirection = invert ? 'down' : 'up';
-    return { ...parts, tone: parts.direction === goodDirection ? 'positive' : 'negative', text: `${parts.text} vs mes anterior` };
-  }
-
   function renderHeader() {
     const wrap = document.createElement('div');
     wrap.className = 'dashboard-header mb-md';
@@ -94,12 +85,12 @@ export function renderDashboardModule(container) {
     grid.appendChild(renderStatCard('Ingresos del mes', formatMoney(income), {
       icon: 'trending-up',
       iconTone: 'success',
-      delta: kpiDelta(income, prevIncome),
+      delta: kpiDelta(income, prevIncome, { label: 'vs mes anterior' }),
     }));
     grid.appendChild(renderStatCard('Gastos del mes', formatMoney(expense), {
       icon: 'trending-down',
       iconTone: 'danger',
-      delta: kpiDelta(expense, prevExpense, { invert: true }),
+      delta: kpiDelta(expense, prevExpense, { invert: true, label: 'vs mes anterior' }),
     }));
 
     const balanceVal = income - expense;
@@ -107,66 +98,12 @@ export function renderDashboardModule(container) {
     grid.appendChild(renderStatCard('Balance', formatMoney(balanceVal), {
       icon: 'bank',
       hero: true,
-      delta: kpiDelta(balanceVal, prevBalance),
+      delta: kpiDelta(balanceVal, prevBalance, { label: 'vs mes anterior' }),
     }));
 
     grid.appendChild(renderStatCard('Gasto de esta semana', formatMoney(weeklyExpense), { icon: 'calendar' }));
 
     return grid;
-  }
-
-  function renderBudgetSection(title, budget, period, { icon, amountFirst = false } = {}) {
-    const progress = budgetProgress(budget, period);
-    const over = progress.remaining < 0;
-    const finite = Number.isFinite(progress.percentUsed);
-    const pctForBar = finite ? Math.min(progress.percentUsed * 100, 100) : 100;
-    const pctText = finite ? formatPercent(progress.percentUsed, 0) : '100%+';
-
-    const card = document.createElement('div');
-    card.className = 'progress-summary-card';
-
-    const header = document.createElement('div');
-    header.className = 'progress-summary-card__header';
-    if (icon) {
-      const iconChip = document.createElement('span');
-      iconChip.className = `kpi-card__icon${over ? ' kpi-card__icon--danger' : ''}`;
-      iconChip.innerHTML = iconMarkup(icon, { size: 16 });
-      header.appendChild(iconChip);
-    }
-    const titleEl = document.createElement('span');
-    titleEl.className = 'progress-summary-card__title';
-    titleEl.textContent = title;
-    header.appendChild(titleEl);
-    card.appendChild(header);
-
-    const valueRow = document.createElement('div');
-    valueRow.className = 'progress-summary-card__value-row';
-    if (amountFirst) {
-      valueRow.innerHTML = `
-        <span class="progress-summary-card__value">${formatMoney(progress.spent)}</span>
-        <span class="progress-summary-card__caption">de ${formatMoney(progress.amount)}</span>
-      `;
-    } else {
-      valueRow.innerHTML = `
-        <span class="progress-summary-card__value">${pctText}</span>
-        <span class="progress-summary-card__caption">${over ? 'Excedido por' : ''} ${formatMoney(Math.abs(progress.remaining))} ${over ? '' : 'restantes'}</span>
-      `;
-    }
-    card.appendChild(valueRow);
-
-    const bar = document.createElement('div');
-    bar.className = 'progress-bar';
-    bar.innerHTML = `<div class="progress-bar__fill${over ? ' progress-bar__fill--over' : ''}" style="width:${pctForBar}%"></div>`;
-    card.appendChild(bar);
-
-    const footnote = document.createElement('div');
-    footnote.className = 'progress-summary-card__footnote';
-    footnote.textContent = amountFirst
-      ? `${pctText} del presupuesto${over ? ' — excedido' : ''}`
-      : `Basado en tu límite de ${formatMoney(progress.amount)}`;
-    card.appendChild(footnote);
-
-    return card;
   }
 
   // Sin presupuesto de mandado configurado, no hay contra qué mostrar barra de progreso —
@@ -386,8 +323,8 @@ export function renderDashboardModule(container) {
     if (monthlyBudget || groceryBudget || mandado !== null) {
       const summaryGrid = document.createElement('div');
       summaryGrid.className = 'stats-grid mb-md';
-      if (monthlyBudget) summaryGrid.appendChild(renderBudgetSection('Presupuesto mensual', monthlyBudget, period, { icon: 'target' }));
-      if (groceryBudget) summaryGrid.appendChild(renderBudgetSection('Mandado', groceryBudget, period, { icon: 'cart', amountFirst: true }));
+      if (monthlyBudget) summaryGrid.appendChild(renderProgressCard('Presupuesto mensual', budgetProgress(monthlyBudget, period), { icon: 'target' }));
+      if (groceryBudget) summaryGrid.appendChild(renderProgressCard('Mandado', budgetProgress(groceryBudget, period), { icon: 'cart', amountFirst: true }));
       else if (mandado !== null) summaryGrid.appendChild(renderMandadoFallbackCard(mandado));
       root.appendChild(summaryGrid);
     }
