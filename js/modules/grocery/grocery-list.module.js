@@ -101,10 +101,16 @@ export function renderGroceryListModule(container) {
     const actions = document.createElement('div');
     actions.className = 'flex gap-sm';
 
+    // Solo ícono + title/aria-label (tooltip nativo en desktop, lector de pantalla en
+    // cualquier plataforma) en vez de texto: con las 4 acciones juntas, los botones con texto
+    // se salían de la pantalla en móvil (ver reporte de usuario). `.btn--icon` ya es 44×44
+    // (objetivo táctil), igual en iOS/Android que en desktop.
     const newBtn = document.createElement('button');
     newBtn.type = 'button';
-    newBtn.className = 'btn btn--primary';
-    newBtn.textContent = '+ Nueva lista';
+    newBtn.className = 'btn btn--icon btn--primary';
+    newBtn.title = 'Nueva lista';
+    newBtn.setAttribute('aria-label', 'Nueva lista');
+    newBtn.innerHTML = iconMarkup('plus', { size: 18 });
     newBtn.addEventListener('click', () => openListForm());
     actions.appendChild(newBtn);
 
@@ -113,14 +119,19 @@ export function renderGroceryListModule(container) {
 
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
-      editBtn.className = 'btn btn--ghost';
-      editBtn.textContent = 'Editar lista';
+      editBtn.className = 'btn btn--icon btn--ghost';
+      editBtn.title = 'Editar lista';
+      editBtn.setAttribute('aria-label', 'Editar lista');
+      editBtn.innerHTML = iconMarkup('edit', { size: 18 });
       editBtn.addEventListener('click', () => openListForm(list));
 
+      const toggleLabel = list.status === 'open' ? 'Marcar completada' : 'Reabrir';
       const toggleBtn = document.createElement('button');
       toggleBtn.type = 'button';
-      toggleBtn.className = 'btn btn--ghost';
-      toggleBtn.textContent = list.status === 'open' ? 'Marcar completada' : 'Reabrir';
+      toggleBtn.className = 'btn btn--icon btn--ghost';
+      toggleBtn.title = toggleLabel;
+      toggleBtn.setAttribute('aria-label', toggleLabel);
+      toggleBtn.innerHTML = iconMarkup(list.status === 'open' ? 'check' : 'rotate-ccw', { size: 18 });
       toggleBtn.addEventListener('click', () => {
         GroceryListRepository.update(list.id, { status: list.status === 'open' ? 'closed' : 'open' });
         render();
@@ -128,8 +139,10 @@ export function renderGroceryListModule(container) {
 
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
-      delBtn.className = 'btn btn--danger';
-      delBtn.textContent = 'Eliminar lista';
+      delBtn.className = 'btn btn--icon btn--danger';
+      delBtn.title = 'Eliminar lista';
+      delBtn.setAttribute('aria-label', 'Eliminar lista');
+      delBtn.innerHTML = iconMarkup('trash', { size: 18 });
       delBtn.addEventListener('click', async () => {
         const confirmed = await confirmDialog({
           title: 'Eliminar lista',
