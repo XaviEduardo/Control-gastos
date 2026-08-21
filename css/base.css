@@ -75,6 +75,10 @@ label {
      poco corto de los ~44px táctiles objetivo (ver docs/responsive-plan.md) — sobre todo
      relevante en footers de modal (Guardar/Cancelar, Eliminar). */
   padding: 12px 16px;
+  /* 1.2 (no el 1.5 heredado del body): con el line-height de párrafo, el botón renderizaba
+     ~8px más alto que un input/select vecino (mismo padding vertical) — se notaba en cada
+     toolbar con buscador + botón lado a lado. */
+  line-height: 1.2;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   font-size: var(--font-size-md);
@@ -105,4 +109,15 @@ label {
   padding: 0;
   gap: 0;
   font-size: var(--font-size-lg);
+}
+
+/* PASS 7 (polish): honra la preferencia de sistema de reducir movimiento — apaga duración de
+   toda transición/animación sin quitar el feedback en sí (hover/focus siguen cambiando de
+   estado, solo sin la transición animada). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

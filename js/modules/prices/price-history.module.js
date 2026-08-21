@@ -243,10 +243,11 @@ export function renderPriceHistoryModule(container) {
         { key: 'date', label: 'Fecha', render: (row) => formatDateShort(row.date) },
         { key: 'storeId', label: 'Tienda', render: (row) => escapeHtml(StoreRepository.getById(row.storeId)?.name || 'Tienda eliminada') },
         { key: 'quantity', label: 'Presentación', render: (row) => `${row.quantity} ${escapeHtml(unitLabel(row.unit))}` },
-        { key: 'price', label: 'Precio', render: (row) => formatMoney(row.price) },
+        { key: 'price', label: 'Precio', align: 'right', render: (row) => formatMoney(row.price) },
         {
           key: 'normalized',
           label: 'Normalizado',
+          align: 'right',
           render: (row) => {
             const n = normalizePrice(row.price, row.quantity, row.unit);
             return n ? escapeHtml(formatNormalizedPrice(n)) : '—';

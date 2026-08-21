@@ -448,7 +448,7 @@ export function renderGroceryListModule(container) {
 
     const menu = createActionMenu(`Más acciones para ${product?.name || 'producto'}`, [
       {
-        label: item.notes ? 'Notas 📝' : 'Notas',
+        label: 'Notas',
         onClick: () => {
           const value = window.prompt('Notas', item.notes || '');
           if (value !== null) {

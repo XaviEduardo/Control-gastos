@@ -77,7 +77,7 @@ export function renderSettingsModule(container) {
   function settingsControlRow({ icon, title, subtitle, control }) {
     const row = document.createElement('div');
     row.className = 'settings-row';
-    const iconChip = icon ? `<span class="kpi-card__icon">${iconMarkup(icon, { size: 16 })}</span>` : '';
+    const iconChip = icon ? `<span class="kpi-card__icon">${iconMarkup(icon, { size: 18 })}</span>` : '';
     row.innerHTML = `
       ${iconChip}
       <span class="settings-row__body">
@@ -95,7 +95,7 @@ export function renderSettingsModule(container) {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'settings-row settings-row--action';
-    const iconChip = icon ? `<span class="kpi-card__icon${danger ? ' kpi-card__icon--danger' : ''}">${iconMarkup(icon, { size: 16 })}</span>` : '';
+    const iconChip = icon ? `<span class="kpi-card__icon${danger ? ' kpi-card__icon--danger' : ''}">${iconMarkup(icon, { size: 18 })}</span>` : '';
     row.innerHTML = `
       ${iconChip}
       <span class="settings-row__body">
@@ -149,7 +149,7 @@ export function renderSettingsModule(container) {
     const row = document.createElement('div');
     row.className = 'settings-row';
     row.innerHTML = `
-      <span class="kpi-card__icon">${iconMarkup('bar-chart', { size: 16 })}</span>
+      <span class="kpi-card__icon">${iconMarkup('bar-chart', { size: 18 })}</span>
       <span class="settings-row__body">
         <span class="settings-row__title">Uso de almacenamiento</span>
         <span class="settings-row__subtitle">localStorage · ${sizeKB} KB · Último guardado: ${escapeHtml(lastUpdatedText)}</span>
@@ -199,7 +199,7 @@ export function renderSettingsModule(container) {
     const importRow = document.createElement('label');
     importRow.className = 'settings-row settings-row--action';
     importRow.innerHTML = `
-      <span class="kpi-card__icon">${iconMarkup('arrow-up-right', { size: 16 })}</span>
+      <span class="kpi-card__icon">${iconMarkup('arrow-up-right', { size: 18 })}</span>
       <span class="settings-row__body">
         <span class="settings-row__title">Importar respaldo</span>
         <span class="settings-row__subtitle">Reemplaza por completo los datos actuales</span>

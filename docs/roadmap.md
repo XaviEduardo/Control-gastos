@@ -37,7 +37,25 @@ usaban Dashboard/Calendario/Reportes/Configuración — se agregó a las 11, con
 o "Mandado" según el grupo; (2) la paleta de charts de Historial de precios seguía con los
 colores viejos (`#2f6fed`/`#1f9d55`/...) en vez del índigo del Design System — actualizada para
 igualar a Reportes/Dashboard. Confirmado sin cambios a lógica financiera, WEIGHT/UNIT,
-Comparador, recurrencias ni `StorageService`. Rediseño global "Minimal Finance" **completo**.
+Comparador, recurrencias ni `StorageService`. **PASS 7 (Final Polish)** hecho — auditoría de
+solo-lectura (4 dimensiones: spacing/sizing/tokens, microinteractions/hover/focus, empty
+states/iconografía, densidad mobile 390×844 y desktop 1440×900) y corrección de los hallazgos
+ALTO/MEDIO/BAJO seguros: `.btn` con `line-height:1.2` (antes se veía más alto que su
+`input`/`select` vecino en cada toolbar); tamaño de ícono unificado a `size:18` dentro del chip
+`.kpi-card__icon` (`progress-card.js` y 4 usos en `settings.module.js` tenían `16` mientras
+Dashboard/Reportes/Ingresos/Gastos usaban `18`); columnas "Precio"/"Normalizado" del Historial
+de precios alineadas a la derecha (única tabla monetaria que no lo estaba); transición
+`background`/`width` agregada a `.sidebar__link`, `.modal-close`, `.action-menu__toggle`,
+`.action-menu__item`, `.settings-row--action` y `.progress-bar__fill` (elementos interactivos
+sin feedback de transición); bloque global `@media (prefers-reduced-motion: reduce)` agregado
+(no existía ninguno); `.app-content` con `max-width:1280px` + `margin-inline:auto` (se estiraba
+sin límite en 1440-1920px); `.sidebar-toggle` de 40px a 44px (objetivo táctil); emoji suelto
+`📝` quitado de un ítem de menú `⋮` en Mi Lista y `✓` Unicode quitado de un botón en el
+Comparador (ambos ya inconsistentes con el sistema de iconos SVG). Documentados sin corregir
+(requieren tocar JS de apertura, no son cambios solo-CSS seguros): transición de entrada del
+panel `⋮` y del modal — ambos usan `display:none`/montaje directo, no animables sin cambiar el
+mecanismo de toggle. Confirmado sin cambios a lógica financiera, WEIGHT/UNIT, Comparador,
+recurrencias ni `StorageService`. Rediseño global "Minimal Finance" **completo** (PASS 1-7).
 No continuar sin autorización explícita para nuevas fases.
 
 ## Fase 0 — Investigación — **hecho**

@@ -121,6 +121,7 @@
   font-size: 1.5rem;
   line-height: 1;
   color: var(--color-text-muted);
+  transition: background var(--transition-fast);
 }
 .modal-close:hover { background: var(--color-bg); }
 
@@ -383,7 +384,7 @@
 .movement-row__amount--income { color: var(--color-success); }
 
 .progress-bar { background: var(--color-bg); border-radius: 999px; height: 10px; overflow: hidden; }
-.progress-bar__fill { height: 100%; background: var(--color-primary); }
+.progress-bar__fill { height: 100%; background: var(--color-primary); transition: width var(--transition-fast); }
 .progress-bar__fill--over { background: var(--color-danger); }
 
 /* ---------- Mandado: tarjeta de resumen de la lista (rediseño "Minimal Finance") ----------
@@ -536,6 +537,7 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--color-text);
+  transition: background var(--transition-fast);
 }
 .action-menu__toggle:hover { background: var(--color-bg); }
 /* position:fixed (no absolute) con top/left calculados en JS (ver js/components/action-menu.js):
@@ -565,6 +567,7 @@
   font-size: var(--font-size-sm);
   color: var(--color-text);
   cursor: pointer;
+  transition: background var(--transition-fast);
 }
 .action-menu__item:hover { background: var(--color-bg); }
 .action-menu__item--danger { color: var(--color-danger); }
@@ -635,7 +638,7 @@ summary { cursor: pointer; color: var(--color-text-secondary); font-size: var(--
 }
 .settings-list > .settings-row:last-child,
 .settings-list > *:last-child .settings-row { border-bottom: none; }
-.settings-row--action { cursor: pointer; }
+.settings-row--action { cursor: pointer; transition: background var(--transition-fast); }
 .settings-row--action:hover { background: var(--color-bg); }
 .settings-row__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .settings-row__title { font-weight: var(--font-weight-medium); }

@@ -24,7 +24,7 @@ export function renderProgressCard(title, progress, { icon, amountFirst = false,
   if (icon) {
     const iconChip = document.createElement('span');
     iconChip.className = `kpi-card__icon${status !== 'normal' ? ` kpi-card__icon--${status === 'over' ? 'danger' : 'warning'}` : ''}`;
-    iconChip.innerHTML = iconMarkup(icon, { size: 16 });
+    iconChip.innerHTML = iconMarkup(icon, { size: 18 });
     header.appendChild(iconChip);
   }
   const titleEl = document.createElement('span');

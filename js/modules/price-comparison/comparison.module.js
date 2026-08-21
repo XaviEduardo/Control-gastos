@@ -331,7 +331,7 @@ export function renderComparisonModule(container) {
       const useBtn = document.createElement('button');
       useBtn.type = 'button';
       useBtn.className = 'btn btn--ghost';
-      useBtn.textContent = entry.item.selectedStoreId === entry.store.id ? 'Tienda asignada ✓' : 'Usar esta tienda';
+      useBtn.textContent = entry.item.selectedStoreId === entry.store.id ? 'Tienda asignada' : 'Usar esta tienda';
       useBtn.disabled = entry.item.selectedStoreId === entry.store.id;
       useBtn.addEventListener('click', () => {
         GroceryListItemRepository.update(entry.item.id, {
