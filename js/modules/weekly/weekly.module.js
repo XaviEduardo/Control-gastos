@@ -4,6 +4,7 @@
 import State from '../../core/state.js';
 import { renderStatCard } from '../../components/stat-card.js';
 import { renderProgressCard } from '../../components/progress-card.js';
+import { iconMarkup } from '../../components/icons.js';
 import { escapeHtml } from '../../core/validators.js';
 import { formatMoney, formatPercent } from '../../core/currency.js';
 import { formatDateShort, startOfWeek, endOfWeek, getISOWeekNumber, toISODate, parseFlexibleDate } from '../../core/dates.js';
@@ -92,10 +93,14 @@ export function renderWeeklyModule(container) {
     const nav = document.createElement('div');
     nav.className = 'period-nav';
 
+    // V2-8: icon buttons (mismo patrón ya usado en Mi Lista/month-year-nav.js) — el texto
+    // "← Semana anterior"/"Semana siguiente →" ocupaba demasiado ancho en mobile.
     const prevBtn = document.createElement('button');
     prevBtn.type = 'button';
-    prevBtn.className = 'btn btn--ghost';
-    prevBtn.textContent = '← Semana anterior';
+    prevBtn.className = 'btn btn--icon btn--ghost';
+    prevBtn.title = 'Semana anterior';
+    prevBtn.setAttribute('aria-label', 'Semana anterior');
+    prevBtn.innerHTML = iconMarkup('chevron-left', { size: 18 });
     prevBtn.addEventListener('click', () => goToWeek(-1));
 
     const label = document.createElement('div');
@@ -104,8 +109,10 @@ export function renderWeeklyModule(container) {
 
     const nextBtn = document.createElement('button');
     nextBtn.type = 'button';
-    nextBtn.className = 'btn btn--ghost';
-    nextBtn.textContent = 'Semana siguiente →';
+    nextBtn.className = 'btn btn--icon btn--ghost';
+    nextBtn.title = 'Semana siguiente';
+    nextBtn.setAttribute('aria-label', 'Semana siguiente');
+    nextBtn.innerHTML = iconMarkup('chevron-right', { size: 18 });
     nextBtn.addEventListener('click', () => goToWeek(1));
 
     nav.append(prevBtn, label, nextBtn);

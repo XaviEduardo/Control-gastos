@@ -8,12 +8,15 @@
 import ProductRepository from '../grocery/product.repository.js';
 import GroceryListRepository from '../grocery/grocery-list.repository.js';
 import GroceryListItemRepository from '../grocery/grocery-list-item.repository.js';
+import StoreBranchRepository from '../stores/store-branch.repository.js';
 import { compareProductAcrossStores, compareListAcrossStores } from '../../services/comparisonService.js';
+import { priceFreshness } from '../../services/priceService.js';
 import { navigateTo } from '../../core/router.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { iconMarkup } from '../../components/icons.js';
 import { showToast } from '../../components/toast.js';
 import { formatMoney } from '../../core/currency.js';
+import { formatDateShort } from '../../core/dates.js';
 import { escapeHtml } from '../../core/validators.js';
 
 const DIMENSION_LABELS = { mass: 'peso', volume: 'volumen', pza: 'pieza', paquete: 'paquete' };
@@ -106,7 +109,11 @@ export function renderComparisonModule(container) {
       : `Presentación por ${DIMENSION_LABELS[group.dimension] || group.dimension} — solo hay un precio registrado, agrega más para comparar`;
     wrap.appendChild(heading);
 
-    if (hasComparison) wrap.appendChild(renderWinnerBanner(best, group.baseUnit));
+    if (hasComparison) {
+      wrap.appendChild(renderWinnerBanner(best, group.baseUnit));
+      const chainRanking = renderChainRanking(group);
+      if (chainRanking) wrap.appendChild(chainRanking);
+    }
 
     const list = document.createElement('ul');
     list.className = 'comparison-product-list';
@@ -116,8 +123,11 @@ export function renderComparisonModule(container) {
       const li = document.createElement('li');
       li.className = `comparison-product-item${highlightAsBest ? ' comparison-product-item--best' : ''}`;
 
+      // V2-7: frescura en vez de la fecha cruda — comunica antigüedad sin ocultar el precio;
+      // la fecha exacta sigue disponible en el `title` (tooltip) para quien la necesite.
+      const freshness = priceFreshness(entry.priceEntry.date);
       const left = document.createElement('span');
-      left.innerHTML = `${escapeHtml(entry.store.name)} <span class="text-muted">(${entry.priceEntry.quantity} ${escapeHtml(entry.priceEntry.unit)} el ${escapeHtml(entry.priceEntry.date)})</span>`;
+      left.innerHTML = `${escapeHtml(entry.store.name)} <span class="text-muted">(${entry.priceEntry.quantity} ${escapeHtml(entry.priceEntry.unit)} · <span title="${escapeHtml(formatDateShort(entry.priceEntry.date))}">${escapeHtml(freshness.label)}</span>)</span>`;
 
       const right = document.createElement('span');
       const diffText = !hasComparison || entry.isBest
@@ -145,10 +155,39 @@ export function renderComparisonModule(container) {
       </div>
       <div class="compare-winner__price">
         <div class="compare-winner__price-value">${formatMoney(best.priceEntry.price)}</div>
-        <div class="compare-winner__price-note">${formatMoney(best.normalized.pricePerBaseUnit)}/${escapeHtml(baseUnit)} · ${best.priceEntry.quantity} ${escapeHtml(best.priceEntry.unit)}</div>
+        <div class="compare-winner__price-note">${formatMoney(best.normalized.pricePerBaseUnit)}/${escapeHtml(baseUnit)} · ${best.priceEntry.quantity} ${escapeHtml(best.priceEntry.unit)} · ${escapeHtml(priceFreshness(best.priceEntry.date).label)}</div>
       </div>
     `;
     return banner;
+  }
+
+  // V2-7 (Comparador V2): "mejor cadena" ≠ "mejor sucursal" — se muestra solo cuando hay ≥2
+  // cadenas con precio (con 1 sola, coincide siempre con el ganador de arriba y no aporta
+  // nada nuevo). Cada fila es la mejor sucursal DE esa cadena, no un promedio inventado (ver
+  // comparisonService.js#aggregateByChain).
+  function renderChainRanking(group) {
+    if (group.chains.length < 2) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mb-md';
+    const heading = document.createElement('div');
+    heading.className = 'text-muted mb-md';
+    heading.textContent = 'Por cadena (mejor sucursal de cada una)';
+    wrap.appendChild(heading);
+
+    const list = document.createElement('ul');
+    list.className = 'comparison-product-list';
+    group.chains.forEach((c) => {
+      const li = document.createElement('li');
+      li.className = `comparison-product-item${c.isBestChain ? ' comparison-product-item--best' : ''}`;
+      li.innerHTML = `
+        <span>${escapeHtml(c.chainName)}${c.isBestChain ? ' <span class="badge badge--success">Mejor cadena</span>' : ''} <span class="text-muted">(${c.branchCount} sucursal${c.branchCount === 1 ? '' : 'es'} con precio)</span></span>
+        <span style="font-weight:700">${formatMoney(c.bestEntry.normalized.pricePerBaseUnit)}/${escapeHtml(group.baseUnit)}</span>
+      `;
+      list.appendChild(li);
+    });
+    wrap.appendChild(list);
+    return wrap;
   }
 
   // ---------- NIVEL 2: mandado completo ----------
@@ -320,8 +359,16 @@ export function renderComparisonModule(container) {
     result.optimized.forEach((entry) => {
       const li = document.createElement('li');
 
+      // V2-7: si el item ya tiene una sucursal fijada por el usuario (ver "Cambiar tienda",
+      // V2-3) distinta de la recomendación optimizada, se muestra como referencia — nunca
+      // reemplaza ni bloquea la sugerencia matemática, solo la contextualiza.
+      const freshness = priceFreshness(entry.priceEntry.date);
+      const preferredBranch = entry.item.selectedBranchId && entry.item.selectedBranchId !== entry.store.id
+        ? StoreBranchRepository.getById(entry.item.selectedBranchId)
+        : null;
+
       const info = document.createElement('span');
-      info.innerHTML = `${escapeHtml(productName(entry.item.productId))} <span class="text-muted">(${entry.item.quantity} ${escapeHtml(entry.item.unit)} en ${escapeHtml(entry.store.name)})</span>`;
+      info.innerHTML = `${escapeHtml(productName(entry.item.productId))} <span class="text-muted">(${entry.item.quantity} ${escapeHtml(entry.item.unit)} en ${escapeHtml(entry.store.name)} · ${escapeHtml(freshness.label)})</span>${preferredBranch ? `<br><span class="text-muted text-xs">Tu sucursal fijada: ${escapeHtml(preferredBranch.name)}</span>` : ''}`;
 
       const right = document.createElement('span');
       right.className = 'flex gap-xs items-center';

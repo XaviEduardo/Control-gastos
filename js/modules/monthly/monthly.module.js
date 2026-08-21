@@ -6,6 +6,7 @@ import { createCategoryRepository } from '../shared/category-repository.js';
 import ExpenseRepository from '../expenses/expense.repository.js';
 import { renderStatCard } from '../../components/stat-card.js';
 import { renderProgressCard } from '../../components/progress-card.js';
+import { renderMonthYearNav } from '../../components/month-year-nav.js';
 import { formatMoney, kpiDelta } from '../../core/currency.js';
 import { MONTH_NAMES, endOfMonth } from '../../core/dates.js';
 import {
@@ -44,13 +45,6 @@ export function renderMonthlyModule(container) {
     State.setSettings({ selectedYear: year, selectedMonth: month });
   }
 
-  function goToMonth(offset) {
-    month += offset;
-    if (month < 0) { month = 11; year -= 1; }
-    else if (month > 11) { month = 0; year += 1; }
-    persist();
-    render();
-  }
 
   function render() {
     root.innerHTML = '';
@@ -66,7 +60,10 @@ export function renderMonthlyModule(container) {
     const daysInMonth = endOfMonth(year, month).getDate();
     const weeklyAvg = expense / (daysInMonth / 7);
 
-    const sections = [renderHeader(), renderNav(), renderStats({ income, expense, prevIncome, prevExpense, mandado, weeklyAvg })];
+    const monthYearNav = renderMonthYearNav({
+      month, year, onChange: (m, y) => { month = m; year = y; persist(); render(); },
+    });
+    const sections = [renderHeader(), monthYearNav, renderStats({ income, expense, prevIncome, prevExpense, mandado, weeklyAvg })];
     const monthlyBudget = BudgetRepository.find('monthly');
     const groceryBudget = BudgetRepository.find('grocery');
     if (monthlyBudget) sections.push(progressCardSpaced('Presupuesto mensual', budgetProgress(monthlyBudget, period), { icon: 'target' }));
@@ -94,56 +91,6 @@ export function renderMonthlyModule(container) {
     const card = renderProgressCard(title, progress, opts);
     card.classList.add('mb-md');
     return card;
-  }
-
-  function renderNav() {
-    const wrap = document.createElement('div');
-    wrap.className = 'card mb-md';
-
-    const nav = document.createElement('div');
-    nav.className = 'period-nav';
-
-    const prevBtn = document.createElement('button');
-    prevBtn.type = 'button';
-    prevBtn.className = 'btn btn--ghost';
-    prevBtn.textContent = '← Mes anterior';
-    prevBtn.addEventListener('click', () => goToMonth(-1));
-
-    const nextBtn = document.createElement('button');
-    nextBtn.type = 'button';
-    nextBtn.className = 'btn btn--ghost';
-    nextBtn.textContent = 'Mes siguiente →';
-    nextBtn.addEventListener('click', () => goToMonth(1));
-
-    const jump = document.createElement('div');
-    jump.className = 'period-nav__jump';
-    jump.innerHTML = `
-      <label for="monthSelect">Mes</label>
-      <select id="monthSelect">${MONTH_NAMES.map((name, i) => `<option value="${i}">${name}</option>`).join('')}</select>
-      <label for="yearInput">Año</label>
-      <input type="number" id="yearInput" value="${year}" step="1">
-    `;
-    const monthSelect = jump.querySelector('#monthSelect');
-    const yearInput = jump.querySelector('#yearInput');
-    monthSelect.value = String(month);
-
-    monthSelect.addEventListener('change', () => {
-      month = Number(monthSelect.value);
-      persist();
-      render();
-    });
-    yearInput.addEventListener('change', () => {
-      const parsed = Number(yearInput.value);
-      if (Number.isInteger(parsed)) {
-        year = parsed;
-        persist();
-        render();
-      }
-    });
-
-    nav.append(prevBtn, jump, nextBtn);
-    wrap.appendChild(nav);
-    return wrap;
   }
 
   // Cada KPI ya muestra su propio delta vs mes anterior (ver kpiDelta) — no hace falta una

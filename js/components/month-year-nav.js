@@ -1,7 +1,11 @@
 import { MONTH_NAMES } from '../core/dates.js';
 import { generateId } from '../core/id.js';
+import { iconMarkup } from './icons.js';
 
-/** Navegación reutilizable de mes/año: ← anterior | select mes + input año | siguiente →. */
+/** Navegación reutilizable de mes/año (V2-8: ver docs/v2-roadmap.md — "problema específico
+ * mes/año en mobile"). [‹] anterior · etiqueta compacta "Mes Año" (tocar para elegir mes/año
+ * exacto) · siguiente [›]. El selector detallado empieza oculto y se revela al tocar la
+ * etiqueta — nunca ocupa ancho de más por defecto, en mobile o en escritorio. */
 export function renderMonthYearNav({ month, year, onChange }) {
   const uid = generateId();
   const wrap = document.createElement('div');
@@ -19,18 +23,30 @@ export function renderMonthYearNav({ month, year, onChange }) {
 
   const prevBtn = document.createElement('button');
   prevBtn.type = 'button';
-  prevBtn.className = 'btn btn--ghost';
-  prevBtn.textContent = '← Mes anterior';
+  prevBtn.className = 'btn btn--icon btn--ghost';
+  prevBtn.title = 'Mes anterior';
+  prevBtn.setAttribute('aria-label', 'Mes anterior');
+  prevBtn.innerHTML = iconMarkup('chevron-left', { size: 18 });
   prevBtn.addEventListener('click', () => emit(month - 1, year));
 
   const nextBtn = document.createElement('button');
   nextBtn.type = 'button';
-  nextBtn.className = 'btn btn--ghost';
-  nextBtn.textContent = 'Mes siguiente →';
+  nextBtn.className = 'btn btn--icon btn--ghost';
+  nextBtn.title = 'Mes siguiente';
+  nextBtn.setAttribute('aria-label', 'Mes siguiente');
+  nextBtn.innerHTML = iconMarkup('chevron-right', { size: 18 });
   nextBtn.addEventListener('click', () => emit(month + 1, year));
 
+  const label = document.createElement('button');
+  label.type = 'button';
+  label.className = 'period-nav__label period-nav__label--action';
+  label.textContent = `${MONTH_NAMES[month]} ${year}`;
+  label.title = 'Elegir mes y año';
+  label.setAttribute('aria-label', `Periodo actual: ${MONTH_NAMES[month]} ${year}. Tocar para elegir otro mes o año.`);
+  label.addEventListener('click', () => jump.classList.toggle('hidden'));
+
   const jump = document.createElement('div');
-  jump.className = 'period-nav__jump';
+  jump.className = 'period-nav__jump hidden';
   jump.innerHTML = `
     <label for="month-${uid}">Mes</label>
     <select id="month-${uid}">${MONTH_NAMES.map((name, i) => `<option value="${i}">${name}</option>`).join('')}</select>
@@ -48,7 +64,7 @@ export function renderMonthYearNav({ month, year, onChange }) {
     if (Number.isInteger(parsed)) emit(Number(monthSelect.value), parsed);
   });
 
-  nav.append(prevBtn, jump, nextBtn);
-  wrap.appendChild(nav);
+  nav.append(prevBtn, label, nextBtn);
+  wrap.append(nav, jump);
   return wrap;
 }

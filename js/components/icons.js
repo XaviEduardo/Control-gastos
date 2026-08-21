@@ -30,6 +30,8 @@ const PATHS = {
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   trash: '<polyline points="3,6 5,6 21,6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
   'rotate-ccw': '<polyline points="1,4 1,10 7,10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
+  'chevron-left': '<polyline points="15,6 9,12 15,18"/>',
+  'chevron-right': '<polyline points="9,6 15,12 9,18"/>',
 };
 
 /** Devuelve el string <svg>...</svg> del icono `name` (cae a "receipt" si no existe). */

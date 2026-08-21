@@ -25,7 +25,23 @@ V2-11 (Cloud) — depende de V2-10 (o al menos de que la interfaz StorageService
 
 ---
 
-## V2-0 — Arquitectura y migración
+## V2-0 — Arquitectura y migración — **hecho**
+
+**Implementado**: `js/core/storage.js#migrate(raw)` ahora delega en `applyPendingMigrations(doc)`,
+que recorre una cadena `MIGRATIONS[fromVersion] = (doc) => doc'` desde la versión detectada del
+documento hasta `CURRENT_VERSION`, aplicando solo los pasos pendientes y deteniéndose sin forzar
+la versión si falta un escalón registrado (nunca finge una migración que no ocurrió). `MIGRATIONS`
+queda vacía a propósito — ninguna fase de contenido (Product/Variant, Store/Chain-Branch) está
+implementada todavía; el siguiente cambio de esquema real solo necesita agregar su función y subir
+`CURRENT_VERSION`, sin tocar el resto del archivo. `CURRENT_VERSION` se mantiene en `1` (sin cambio
+de comportamiento observable, tal como pedía el criterio de aceptación). Validado con 16 casos
+funcionales reales contra la API pública de `StorageService` (shim de `localStorage` en Node, no
+solo lectura de código): versión 1 con datos reales no pierde ninguna colección; segunda carga es
+idempotente (documento idéntico); documento sin `version` asume `CURRENT_VERSION` sin perder datos;
+documento con `version` corrupta no lanza excepción ni pierde datos; `exportData`/`importData`/
+`clear` siguen funcionando exactamente igual, incluyendo el rechazo de un respaldo de versión futura
+sin tocar el estado actual. `node --check` sin errores. Cero cambios en `groceryService.js`,
+`priceService.js`, UI, CSS, navegación, ni en la forma de `Product`/`Store`/`Price`.
 
 **Objetivo**: preparar el mecanismo genérico para poder migrar el esquema de `localStorage`
 sin perder datos, reutilizando lo que ya existe.
@@ -45,7 +61,42 @@ infraestructura pura, no cambia comportamiento observable.
 
 ---
 
-## V2-1 — Modelo Product/Variant
+## V2-1 — Modelo Product/Variant — **hecho**
+
+**Implementado**: nueva colección `productVariants` + `js/modules/grocery/product-variant.repository.js`
+(CRUD, nunca elimina físicamente — solo `setStatus`, mismo criterio que Product/Store).
+`storage.js` ganó `migrateV1ToV2`: cada `GroceryProduct` existente genera exactamente una
+`ProductVariant` (`purchaseUnit = preferredUnit`, resto `null`), `Price`/`GroceryListItem`
+ganan `productVariantId` aditivo (mismo `id`, `productId` intacto). `CURRENT_VERSION` sube a 2.
+`isValidBackupShape()` se corrigió para no exigir colecciones ausentes en respaldos anteriores
+a esta fase (si no, un respaldo v1 real habría sido rechazado). `init()` ahora pasa el seed por
+`migrate()` en vez de forzar `CURRENT_VERSION` directo, para que una instalación nueva reciba
+las mismas migraciones que una real (sin mantener el seed a mano en cada fase). Se encontró y
+corrigió, además, un bug real en la propia infraestructura de V2-0: `load()` migraba en memoria
+pero nunca persistía el resultado — sin ninguna mutación posterior, cada carga volvía a migrar
+desde el mismo raw v1 generando ids de variante nuevos cada vez; ahora `load()` persiste de
+inmediato cuando `migrate()` sí transformó el documento.
+
+UI: `products.module.js` reescrito — cada Product es una tarjeta con sus `ProductVariant`
+listadas debajo (reutiliza `.movement-list`/`.movement-row` ya existentes, cero CSS nuevo);
+formulario de Product simplificado a nombre+categoría; nuevo formulario de Variant (marca,
+presentación, unidad de compra, notas). `grocery-list-item-form.js`/`price-history`→
+`price-form.js` se extrajeron de sus monolitos (refactor V2-9 adelantado, ver justificación de
+secuenciación) — el selector de "Agregar producto a la lista" ahora es por variante
+(`<optgroup>` por producto); Historial de precios sigue seleccionando por producto (sin
+rediseño de UX en esta fase) pero estampa `productVariantId` cuando el producto tiene
+exactamente una variante activa (nunca adivina entre varias). `renderItemRow` de Mi Lista
+resuelve por `productVariantId` con fallback a `productId`. Botones de Mi Lista/Productos con
+icono+`title`/`aria-label` donde ahorra espacio, mismo Design System.
+
+Validado con 42 aserciones funcionales reales (Node + shim de `localStorage`, no solo lectura
+de código): migración v1→v2 sin pérdida, WEIGHT ($70 Tomate) y UNIT ($64 Leche) sin cambios,
+idempotencia, compatibilidad de backups anteriores, `init()` con seed, y el fix de
+`update()` de `ProductVariantRepository` (encontrado por una auditoría de solo-lectura:
+editar una variante dejaba `presentationAmount` como string en vez de Number). Confirmado sin
+cambios en `groceryService.js`, `priceService.js`, `comparisonService.js`,
+`comparison.module.js`, `reports.module.js`, `stores.module.js`, `seed.js` — todos siguen
+usando `productId` exactamente igual que antes.
 
 **Objetivo**: introducir `ProductVariant` sin romper el catálogo actual.
 
@@ -75,7 +126,41 @@ crear una segunda variante de un producto existente es posible y no afecta a la 
 
 ---
 
-## V2-2 — Cadena/Sucursal
+## V2-2 — Cadena/Sucursal — **hecho**
+
+**Implementado**: nuevas colecciones `storeChains`/`storeBranches` +
+`js/modules/stores/store-chain.repository.js` / `store-branch.repository.js` (CRUD, nunca
+elimina físicamente). `storage.js` ganó `migrateV2ToV3`: cada `Store` existente genera una
+`StoreChain` homónima y se convierte en `StoreBranch` con el **mismo `id`** — a diferencia de
+Product/Variant, aquí no hace falta tabla de mapeo (`Price.branchId`/
+`GroceryListItem.selectedBranchId` son una copia directa de `storeId`/`selectedStoreId`).
+`CURRENT_VERSION` sube a 3. La colección vieja `stores` se conserva intacta sin tocar (nunca se
+borra ni se vuelve a escribir).
+
+Decisión de diseño central: `js/modules/stores/store.repository.js` (el módulo legacy, MISMA
+interfaz `{list, getById, create, update, setStatus}`) se convirtió en una capa de
+compatibilidad que delega en `store-branch.repository.js` — así `price-history.module.js`,
+`price-form.js` y `reports.module.js` sigan funcionando **sin ningún cambio de código**,
+leyendo transparentemente `storeBranches` en vez de la `stores` congelada.
+`comparisonService.js` recibió un cambio mínimo de 2 líneas (`activeStores()` lee
+`storeBranches`; `latestPriceEntry()` compara `branchId`) — el algoritmo de comparación no se
+tocó, y `comparison.module.js` no necesitó ningún cambio (ya era agnóstico a la forma exacta
+del objeto "store"). `grocery-list-item.repository.js`/`price.repository.js` ganaron
+auto-sincronización: fijar `selectedStoreId`/`storeId` sin fijar el campo nuevo lo deriva
+automáticamente — así "Usar esta tienda" del Comparador no necesitó tocarse.
+
+UI: `stores.module.js` reescrito — cada Chain es una tarjeta con sus Branches listadas debajo
+(mismo patrón que Productos/V2-1, reutiliza `.movement-list`/`.movement-row`, cero CSS nuevo);
+formularios de Cadena (nombre+notas) y Sucursal (nombre+ubicación+notas) con botones ✏️/⋮/`+`
+icono+`title`/`aria-label`.
+
+Validado con 22 aserciones funcionales reales (Node + shim de `localStorage`): migración en
+cadena completa v1→v2→v3 sin pérdida, mismo `id` branch=store original, `stores` intacta,
+WEIGHT preservado, `StoreRepository` (shim) resolviendo la branch migrada, dos branches bajo
+la misma chain, comparador resolviendo correctamente tanto una branch migrada como una sucursal
+nueva creada después de esta fase (sin Store legacy) en cuanto tiene un precio, y persistencia
+tras recargar. Auditoría de solo lectura confirmó cero cambios en `price-history.module.js`,
+`price-form.js`, `reports.module.js`, `comparison.module.js`.
 
 **Objetivo**: separar `StoreChain` de `StoreBranch` sin perder ninguna tienda registrada.
 
@@ -97,7 +182,32 @@ Historial/Comparador; agrupar dos branches bajo la misma chain es posible despu�
 
 ---
 
-## V2-3 — Mandado 2.0 / sesión de compra
+## V2-3 — Mandado 2.0 / sesión de compra — **hecho**
+
+**Implementado**: `GroceryList` gana `activeBranchId` vía `migrateV3ToV4` (`CURRENT_VERSION`
+sube a 4; aditivo puro, `null` por defecto tanto en listas migradas como en listas nuevas).
+`groceryService.js` gana `effectiveBranchId(item, list)` — `item.selectedBranchId` si el
+usuario la fijó, si no `list.activeBranchId`, si no `null` — puramente derivado, no participa
+en ningún subtotal. **No se creó `ShoppingSession`**, tal como concluyó el análisis.
+
+UI (`grocery-list.module.js`, sin cambiar paleta/tipografía/identidad): nueva sección entre el
+resumen de totales y los productos — sin `activeBranchId` (o si el usuario pide "Cambiar") se
+muestra "¿Dónde estás comprando?" con las sucursales activas agrupadas por cadena, reutilizando
+`.settings-list`/`.settings-row` (Configuración) sin CSS nuevo; con sucursal ya fijada se
+muestra un indicador discreto "Comprando en {Cadena} — {Sucursal}" con un botón ✏️ para
+cambiarla. Nunca bloquea el uso del resto de la lista (recomienda, no impone). Cada item ganó
+"Cambiar tienda" en su menú `⋮` (modal con `<select>` agrupado por cadena, "Usar la sucursal de
+la lista" como opción para volver a heredar) y muestra un sufijo discreto con el nombre de la
+sucursal SOLO cuando tiene una propia (heredar en silencio es el punto de tener sucursal activa
+— evita ruido visual). `.grocery-item-row` ganó `:hover` sutil en escritorio.
+
+Validado con 12 aserciones funcionales reales (migración v1→v2→v3→v4 completa, herencia y
+override de sucursal por item, WEIGHT preservado, persistencia F5) más una auditoría de
+solo-lectura de la UI que encontró y se corrigió un hallazgo ALTO real: el header de "¿Dónde
+estás comprando?" (título + botón "Cancelar") no tenía `flexWrap`, a diferencia de los 5
+headers hermanos del proyecto con la misma forma — overflow horizontal real en 320-375px al
+pulsar "Cambiar" con una sucursal ya fijada. Corregido con el mismo patrón ya usado en el resto
+de la app.
 
 **Objetivo**: permitir fijar "dónde estoy comprando" una vez por mandado.
 
@@ -119,7 +229,43 @@ lo decide explícitamente.
 
 ---
 
-## V2-4 — Captura rápida + historial automático de precios
+## V2-4 — Captura rápida + historial automático de precios — **hecho**
+
+**Implementado**: nuevo `js/services/purchaseObservationService.js` — único punto de código
+que decide si un `GroceryListItem` (`purchased:true` + `actualPrice` válido + sucursal
+conocida vía `effectiveBranchId` + `productVariantId` resuelto) genera/actualiza una
+`PriceObservation`. `price.repository.js` gana `source`/`groceryListItemId` en `create()` +
+`findByGroceryListItemId()` (clave de deduplicación). `storage.js` ganó `migrateV4ToV5`
+(`CURRENT_VERSION` sube a 5): todo precio anterior a esta fase se backfillea con
+`source:'manual'` (hecho real, no supuesto — nunca existió código que escribiera `prices`
+automáticamente antes). El `price` de la observación reutiliza `itemRealSubtotal(item)` (ya
+existente, sin duplicar la fórmula); la fecha usa `list.startDate` (estable, no "hoy" en cada
+edición).
+
+**Comportamiento al desmarcar "comprado" (definido y documentado explícitamente)**: la
+observación ya creada NUNCA se borra ni se recalcula automáticamente al desmarcar el
+checkbox — sigue siendo un dato histórico válido. Volver a marcar reactiva la sincronización
+sobre la MISMA observación (mismo `groceryListItemId`), nunca una segunda.
+
+UI (`grocery-list.module.js`): nuevo `updateItemAndSync(item, patch, list)` — único punto que
+combina actualizar un item con sincronizar su observación; usado por los 5 campos editables del
+item. Toast discreto "Precio guardado en Historial" solo en checkbox y precio real (cuando
+`syncPurchaseObservation` de verdad escribió algo — nunca en cada tecla). `openItemBranchForm`
+y el picker de sucursal de la lista (barrido retroactivo al fijar `activeBranchId` por primera
+vez) también resincronizan. Historial (`price-history.module.js`) gana un badge discreto
+"Compra"/"Manual" (`source`) en la tabla y la tarjeta móvil — aparece de inmediato sin
+recargar (mismo `State` compartido de siempre). `price-form.js` marca `source:'manual'`
+explícito; el flujo manual sigue intacto.
+
+Validado con 24 aserciones funcionales reales: sin sucursal conocida no crea nada; con
+sucursal sí crea con `source:'purchase'` y el precio correcto (verificado normalizando);
+corregir el precio dos veces deja 1 sola observación (dedupe); desmarcar no borra ni
+recalcula; volver a marcar reutiliza la misma observación; item sin variante no crea nada;
+captura manual coexiste con `source:'manual'` separada de las de compra; WEIGHT/UNIT
+(`groceryService.js`) y `priceService.js` sin ninguna modificación; persistencia F5. Auditoría
+de solo lectura de la UI sin hallazgos bloqueantes (1 nota BAJA: el resumen "Último precio por
+tienda" y el gráfico de evolución no llevan el badge — decisión razonable, son vistas
+agregadas, el brief lo condicionaba explícitamente a "si aporta valor").
 
 **Objetivo (el de mayor valor de todo el roadmap)**: que registrar el precio real de un
 producto durante la compra genere automáticamente una `PriceObservation`, sin captura
@@ -147,7 +293,30 @@ Historial sigue intacto.
 
 ---
 
-## V2-5 — Listas reutilizables
+## V2-5 — Listas reutilizables — **hecho** (solo "Repetir último mandado"; "Productos
+habituales" queda para V2-6 tal como se pidió)
+
+**Implementado**: `GroceryListRepository.duplicate(sourceId)` — clona la lista origen en una
+NUEVA (`id` nuevo, nombre `"{original} (copia)"`, `startDate` de hoy, hereda `budget` pero no
+`notes`) más sus items (mismo `productVariantId`/categoría/cantidad/unidad/precio
+estimado/notas). La "limpieza" (lista siempre `status:'open'`, sin `linkedExpenseId` ni
+`activeBranchId`; items siempre `purchased:false`, `actualPrice:null`, sin sucursal fijada) no
+requirió ningún filtro explícito en `duplicate()` — `create()` de ambos repositorios YA
+hardcodeaba esos campos "limpios" sin aceptarlos como parámetro desde antes de esta fase,
+así que clonar a través de `create()` los deja limpios por construcción. Nuevo
+`GroceryListItemRepository.forList(groceryListId)` para ubicar los items a clonar.
+
+UI (`grocery-list.module.js`): el botón "+" del selector de lista ahora, si ya existe al menos
+un mandado, abre un modal simple ("Nuevo mandado") con 2 botones grandes apilados: "Repetir
+'{último mandado}'" o "Crear lista vacía" (flujo de siempre, sin cambios). Sin listas previas,
+sigue yendo directo al formulario vacío como antes.
+
+Validado con 25 aserciones funcionales reales: la lista y los items clonados tienen ids
+NUEVOS; se clona composición (variante/cantidad/categoría/precio estimado/notas útiles) pero
+nunca compra/precio real/sucursal fijada; clonar no genera ninguna `PriceObservation`; la
+lista original (incluida cerrada, con `linkedExpenseId` y items comprados) queda **intacta**;
+`duplicate()` de un id inexistente devuelve `null` sin romper nada; persistencia F5. Auditoría
+de solo lectura de la UI sin hallazgos.
 
 **Objetivo**: reducir el trabajo de armar cada mandado nuevo.
 
@@ -170,7 +339,31 @@ sin afectar la lista original.
 
 ---
 
-## V2-6 — Productos habituales (detección) + Lista por sucursal + Fijar tienda
+## V2-6 — Productos habituales (detección) + Lista por sucursal + Fijar tienda — **hecho**
+
+**Implementado**:
+- **Parte A (frecuentes)**: `groceryService.js#frequentProductIds()` — cuenta, por `productId`,
+  en cuántas de las últimas 10 listas CERRADAS aparece (umbral 80%, mínimo 3 listas cerradas
+  para evitar falsos positivos con poco historial) — 100% derivado, `Set` en memoria, nada
+  persistido. UI: nueva sección "Productos habituales" en Mi Lista (oculta si no hay
+  candidatos pendientes de agregar), cada uno con su propio botón `+` — nunca preseleccionados.
+- **Parte B (lista por sucursal)**: nuevo toggle `Lista`/`Por sucursal` (2 `.btn--icon`, iconos
+  `grid`/`store`) en Mi Lista. `renderCategoryGroup` se generalizó a `renderItemGroup` —
+  reutilizado por AMBOS modos, mismos items (`itemsForList`), solo cambia el agrupador
+  (`categoryId` vs. `effectiveBranchId`) — puramente presentación, cero dato duplicado.
+- **Parte C (sucursal preferida)**: `ProductVariant` gana `preferredBranchId` opcional
+  (migración `migrateV5ToV6`, `CURRENT_VERSION` sube a 6). Nueva acción "Preferir sucursal..."
+  en el menú de cada variante (Productos). `groceryService.js#effectiveBranchId` extendido a 3
+  niveles: `item.selectedBranchId` → `list.activeBranchId` → `variant.preferredBranchId` — la
+  preferencia es el escalón MÁS BAJO, nunca bloquea nada, y el mismo cambio beneficia
+  automáticamente a V2-4 (captura automática) y a la Parte B (agrupación por sucursal).
+
+Validado con 14 aserciones funcionales reales: la regla de frecuentes reproduce EXACTO el
+ejemplo del brief (8 de 10 → Frecuente, 7 de 10 → no); ningún campo `frequent` se persiste en
+ningún lado; los 3 niveles de prioridad de `effectiveBranchId` respetan el orden correcto y
+"nunca impiden elegir otra sucursal"; migración v5→v6 sin pérdida; WEIGHT/UNIT sin cambios;
+persistencia F5. Auditoría de solo lectura de la UI sin hallazgos — confirmado que el modo
+"por categoría" (default) reproduce exactamente el comportamiento anterior a esta fase.
 
 **Objetivo**: (a) marcar productos "frecuentes" con una regla simple sobre datos existentes;
 (b) organizar visualmente una lista por sucursal; (c) permitir fijar sucursal preferida.
@@ -200,7 +393,35 @@ falsos positivos).
 
 ---
 
-## V2-7 — Comparador v2
+## V2-7 — Comparador v2 — **hecho**
+
+**Implementado**: `comparisonService.js#compareProductAcrossStores` gana `chains:
+[{chainId, chainName, branchCount, bestEntry, isBestChain}]` por cada grupo de dimensión —
+aditivo puro sobre los mismos `entries` ya calculados (agrupa, no recalcula); "mejor cadena" =
+su sucursal más barata con precio, nunca un promedio inventado. `compareListAcrossStores`
+(Nivel 2) **no se tocó** — sigue usando branches exactamente igual que en V2-2, tal como
+pedía conservar "mejor tienda única/compra optimizada/ahorro potencial". `priceService.js`
+gana `priceFreshness(dateStr)` → `{days, tone, label}` ("Hoy"/"Hace N días"/"Precio antiguo"),
+puramente derivado de `date` en cada render, sin campo nuevo almacenado ni ocultar precios
+viejos.
+
+UI (`comparison.module.js`, mismo Design System): Nivel 1 muestra frescura en vez de la fecha
+cruda (fecha exacta en `title`/tooltip) y una nueva sección "Por cadena" (solo si hay ≥2
+cadenas con precio — con 1 sola coincidiría siempre con el ganador y no aportaría nada).
+Nivel 2 muestra frescura por producto y, si el item ya tiene una sucursal fijada
+(`selectedBranchId`, V2-3) distinta de la recomendación optimizada, una nota discreta como
+sugerencia — nunca bloquea "Usar esta tienda". Sin tablas nuevas; se reutilizan
+`.comparison-product-list`/`.compare-winner` ya existentes.
+
+Validado con 18 aserciones funcionales reales: **regresión exacta** de Nivel 1 (mismo ganador,
+mismo `differenceVsBest`) y Nivel 2 (misma tienda única, mismo total optimizado) con los mismos
+datos de antes de esta fase; agregación por cadena correcta (mejor sucursal por cadena, no
+promedio); frescura con los mismos días del ejemplo del brief (2 y 15 días). Se encontró y
+corrigió un bug real durante las pruebas: comparar `Date.now()` (con hora) contra la medianoche
+de la fecha objetivo redondeaba mal según la hora del día en que se consultara — ahora ambas
+fechas se normalizan a medianoche antes de restar. Auditoría de solo lectura de la UI sin
+hallazgos — confirmado que `reports.module.js#cheapestStores` (también consumidor de
+`compareProductAcrossStores`) sigue funcionando sin cambios, ajeno al campo `chains` nuevo.
 
 **Objetivo**: comparar Producto+Variante+Presentación+Sucursal+Precio+Fecha, mostrando mejor
 precio actual, mejor cadena, mejor sucursal, mejor tienda única para la lista, compra

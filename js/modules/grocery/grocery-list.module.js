@@ -6,9 +6,15 @@ import State from '../../core/state.js';
 import GroceryListRepository from './grocery-list.repository.js';
 import GroceryListItemRepository from './grocery-list-item.repository.js';
 import ProductRepository from './product.repository.js';
+import ProductVariantRepository from './product-variant.repository.js';
+import StoreChainRepository from '../stores/store-chain.repository.js';
+import StoreBranchRepository from '../stores/store-branch.repository.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import ExpenseRepository from '../expenses/expense.repository.js';
-import { itemsForList, categoryTotals, listTotals, itemEffectiveSubtotal } from '../../services/groceryService.js';
+import {
+  itemsForList, categoryTotals, listTotals, itemEffectiveSubtotal, effectiveBranchId, frequentProductIds,
+} from '../../services/groceryService.js';
+import { syncPurchaseObservation } from '../../services/purchaseObservationService.js';
 import { renderEmptyState } from '../../components/empty-state.js';
 import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { iconMarkup } from '../../components/icons.js';
@@ -17,16 +23,22 @@ import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
 import { formatMoney, formatPercent } from '../../core/currency.js';
 import { toISODate, formatDateShort } from '../../core/dates.js';
-import { isRequired, isPositiveNumber, validate, escapeHtml } from '../../core/validators.js';
+import { isRequired, validate, escapeHtml } from '../../core/validators.js';
 import { UNIT_OPTIONS } from './units.js';
+import { formatVariantSuffix } from './variant-format.js';
+import { openGroceryItemForm } from './grocery-list-item-form.js';
 
-const groceryCategoryRepo = createCategoryRepository('groceryCategories');
 const expenseCategoryRepo = createCategoryRepository('expenseCategories');
 
 export function renderGroceryListModule(container) {
   ensureActionMenuOutsideClick();
   const settings = State.getSettings();
   let selectedListId = settings.selectedGroceryListId || null;
+  // V2-3/V2-6: nada de esto es persistente (ver docs/v2-data-model.md — GroceryList.
+  // activeBranchId es lo persistente); `branchPickerOpen` controla si el picker de sucursal
+  // está expandido y `groupMode` si Mi Lista se ve por categoría o por sucursal — ambos son
+  // preferencias de esta sesión de UI, no del modelo de datos.
+  const view = { branchPickerOpen: false, groupMode: 'category' };
 
   const root = document.createElement('div');
   root.className = 'module-view';
@@ -67,6 +79,9 @@ export function renderGroceryListModule(container) {
 
     const list = GroceryListRepository.getById(selectedListId);
     root.appendChild(renderTotalsSummary(list));
+    root.appendChild(renderBranchSection(list));
+    const frequentSection = renderFrequentProductsSection(list);
+    if (frequentSection) root.appendChild(frequentSection);
     root.appendChild(renderItemsByCategory(list));
   }
 
@@ -111,7 +126,13 @@ export function renderGroceryListModule(container) {
     newBtn.title = 'Nueva lista';
     newBtn.setAttribute('aria-label', 'Nueva lista');
     newBtn.innerHTML = iconMarkup('plus', { size: 18 });
-    newBtn.addEventListener('click', () => openListForm());
+    // V2-5: si ya existe al menos un mandado, ofrece repetirlo antes de ir directo al
+    // formulario vacío — "reducir drásticamente el trabajo" de armar cada lista desde cero.
+    newBtn.addEventListener('click', () => {
+      const existingLists = currentLists();
+      if (existingLists.length) openNewListChoice(existingLists[0]);
+      else openListForm();
+    });
     actions.appendChild(newBtn);
 
     if (selectedListId) {
@@ -284,21 +305,130 @@ export function renderGroceryListModule(container) {
     return card;
   }
 
+  // V2-3 (Mandado 2.0): "¿dónde estoy comprando ahora?" — GroceryList.activeBranchId, sin
+  // entidad nueva. Con sucursal ya fijada se muestra un indicador discreto ("Comprando en...")
+  // con una forma de cambiarla; sin fijar (o si el usuario pidió cambiarla) se muestra el
+  // selector. Nunca bloquea el resto de la pantalla — es una recomendación de flujo, no un
+  // requisito para poder usar la lista (mismo criterio de "recomendar, no imponer" del resto
+  // del rediseño V2).
+  function renderBranchSection(list) {
+    const activeBranch = list.activeBranchId ? StoreBranchRepository.getById(list.activeBranchId) : null;
+    if (activeBranch && !view.branchPickerOpen) {
+      return renderBranchIndicator(activeBranch);
+    }
+    return renderBranchPicker(list, activeBranch);
+  }
+
+  function renderBranchIndicator(branch) {
+    const chain = StoreChainRepository.getById(branch.chainId);
+    const card = document.createElement('div');
+    card.className = 'card mb-md';
+
+    const row = document.createElement('div');
+    row.className = 'settings-row';
+    row.innerHTML = `
+      <span class="kpi-card__icon">${iconMarkup('store', { size: 16 })}</span>
+      <span class="settings-row__body">
+        <span class="settings-row__title">Comprando en</span>
+        <span class="settings-row__subtitle">${escapeHtml(chain?.name || '')}${chain ? ' — ' : ''}${escapeHtml(branch.name)}</span>
+      </span>
+    `;
+
+    const changeBtn = document.createElement('button');
+    changeBtn.type = 'button';
+    changeBtn.className = 'btn btn--icon btn--ghost';
+    changeBtn.title = 'Cambiar sucursal';
+    changeBtn.setAttribute('aria-label', 'Cambiar sucursal donde estás comprando');
+    changeBtn.innerHTML = iconMarkup('edit', { size: 16 });
+    changeBtn.addEventListener('click', () => { view.branchPickerOpen = true; render(); });
+    row.appendChild(changeBtn);
+
+    card.appendChild(row);
+    return card;
+  }
+
+  function renderBranchPicker(list, activeBranch) {
+    const card = document.createElement('div');
+    card.className = 'card mb-md';
+
+    const header = document.createElement('div');
+    header.className = 'flex justify-between items-center gap-sm mb-md';
+    header.style.flexWrap = 'wrap';
+    header.innerHTML = '<div class="card-title">¿Dónde estás comprando?</div>';
+    if (activeBranch) {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn btn--ghost';
+      cancelBtn.textContent = 'Cancelar';
+      cancelBtn.addEventListener('click', () => { view.branchPickerOpen = false; render(); });
+      header.appendChild(cancelBtn);
+    }
+    card.appendChild(header);
+
+    const chains = StoreChainRepository.list({ includeInactive: false });
+    const options = [];
+    chains.forEach((chain) => {
+      StoreBranchRepository.forChain(chain.id, { includeInactive: false }).forEach((branch) => {
+        options.push({ chain, branch });
+      });
+    });
+
+    if (!options.length) {
+      const empty = document.createElement('p');
+      empty.className = 'text-muted';
+      empty.textContent = 'Agrega una tienda desde Mandado > Tiendas para poder elegir dónde comprar.';
+      card.appendChild(empty);
+      return card;
+    }
+
+    const optionsList = document.createElement('div');
+    optionsList.className = 'settings-list';
+    options.forEach(({ chain, branch }) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'settings-row settings-row--action';
+      row.innerHTML = `
+        <span class="kpi-card__icon">${iconMarkup('store', { size: 16 })}</span>
+        <span class="settings-row__body">
+          <span class="settings-row__title">${escapeHtml(chain.name)} — ${escapeHtml(branch.name)}</span>
+        </span>
+      `;
+      row.addEventListener('click', () => {
+        const updatedList = GroceryListRepository.update(list.id, { activeBranchId: branch.id });
+        // Caso poco común pero real: items marcados comprado+con precio ANTES de fijar la
+        // sucursal de la lista (sin sucursal propia, así que no se pudo generar su
+        // observación al momento). Al fijarla ahora, se resincronizan retroactivamente —
+        // syncPurchaseObservation ya es un no-op seguro para los que no aplican.
+        itemsForList(list.id).forEach((it) => syncPurchaseObservation(it, updatedList));
+        view.branchPickerOpen = false;
+        showToast(`Comprando en ${chain.name} — ${branch.name}`);
+        render();
+      });
+      optionsList.appendChild(row);
+    });
+    card.appendChild(optionsList);
+
+    return card;
+  }
+
   function renderItemsByCategory(list) {
     const wrap = document.createElement('div');
-    const totals = categoryTotals(list.id);
 
-    const addBar = document.createElement('div');
-    addBar.className = 'flex justify-end mb-md';
+    const toolbar = document.createElement('div');
+    toolbar.className = 'flex justify-between items-center gap-sm mb-md';
+    toolbar.style.flexWrap = 'wrap';
+    toolbar.appendChild(renderGroupModeToggle());
+
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'btn btn--primary';
     addBtn.textContent = '+ Agregar producto';
-    addBtn.addEventListener('click', () => openItemForm(list));
-    addBar.appendChild(addBtn);
-    wrap.appendChild(addBar);
+    addBtn.addEventListener('click', () => openGroceryItemForm({ list, onSaved: render }));
+    toolbar.appendChild(addBtn);
+    wrap.appendChild(toolbar);
 
-    if (!totals.length) {
+    const items = itemsForList(list.id);
+    if (!items.length) {
       wrap.appendChild(renderEmptyState({
         icon: '🥕',
         title: 'Esta lista todavía no tiene productos',
@@ -307,46 +437,206 @@ export function renderGroceryListModule(container) {
       return wrap;
     }
 
-    totals.forEach(({ category, effective }) => {
-      const items = itemsForList(list.id).filter((i) => i.categoryId === category.id);
-      if (!items.length) return;
-      wrap.appendChild(renderCategoryGroup(list, category, items, effective));
-    });
+    if (view.groupMode === 'branch') {
+      renderGroupsByBranch(list, items).forEach((node) => wrap.appendChild(node));
+    } else {
+      const totals = categoryTotals(list.id);
+      totals.forEach(({ category, effective }) => {
+        const catItems = items.filter((i) => i.categoryId === category.id);
+        if (!catItems.length) return;
+        wrap.appendChild(renderItemGroup(category.name, catItems, effective, list));
+      });
+    }
 
     return wrap;
   }
 
-  function renderCategoryGroup(list, category, items, categoryEffectiveTotal) {
+  // V2-6 (Parte B — "Lista por sucursal"): puramente presentación, mismos items de siempre
+  // (`itemsForList`), solo cambia cómo se agrupan visualmente — nunca se crea/duplica ningún
+  // dato. `.btn--icon` activo/inactivo simula un toggle segmentado sin CSS nuevo.
+  function renderGroupModeToggle() {
+    const wrap = document.createElement('div');
+    wrap.className = 'flex gap-xs';
+
+    const catBtn = document.createElement('button');
+    catBtn.type = 'button';
+    catBtn.className = `btn btn--icon ${view.groupMode === 'category' ? 'btn--primary' : 'btn--ghost'}`;
+    catBtn.title = 'Ver por categoría';
+    catBtn.setAttribute('aria-label', 'Ver agrupado por categoría');
+    catBtn.setAttribute('aria-pressed', String(view.groupMode === 'category'));
+    catBtn.innerHTML = iconMarkup('grid', { size: 18 });
+    catBtn.addEventListener('click', () => { view.groupMode = 'category'; render(); });
+
+    const branchBtn = document.createElement('button');
+    branchBtn.type = 'button';
+    branchBtn.className = `btn btn--icon ${view.groupMode === 'branch' ? 'btn--primary' : 'btn--ghost'}`;
+    branchBtn.title = 'Ver por sucursal';
+    branchBtn.setAttribute('aria-label', 'Ver agrupado por sucursal');
+    branchBtn.setAttribute('aria-pressed', String(view.groupMode === 'branch'));
+    branchBtn.innerHTML = iconMarkup('store', { size: 18 });
+    branchBtn.addEventListener('click', () => { view.groupMode = 'branch'; render(); });
+
+    wrap.append(catBtn, branchBtn);
+    return wrap;
+  }
+
+  // Agrupa los MISMOS items por su sucursal efectiva (ver groceryService.js#effectiveBranchId
+  // — selectedBranchId propio, si no la de la sesión, si no la preferida de la variante). Los
+  // sin ninguna sucursal resoluble caen en "Sin sucursal asignada", al final.
+  function renderGroupsByBranch(list, items) {
+    const groups = new Map();
+    items.forEach((item) => {
+      const branchId = effectiveBranchId(item, list) || 'none';
+      if (!groups.has(branchId)) groups.set(branchId, []);
+      groups.get(branchId).push(item);
+    });
+
+    const namedIds = [...groups.keys()]
+      .filter((id) => id !== 'none')
+      .sort((a, b) => branchGroupLabel(a).localeCompare(branchGroupLabel(b)));
+    const orderedIds = groups.has('none') ? [...namedIds, 'none'] : namedIds;
+
+    return orderedIds.map((branchId) => {
+      const groupItems = groups.get(branchId);
+      const total = groupItems.reduce((sum, item) => sum + itemEffectiveSubtotal(item), 0);
+      return renderItemGroup(branchGroupLabel(branchId), groupItems, total, list);
+    });
+  }
+
+  function branchGroupLabel(branchId) {
+    if (branchId === 'none') return 'Sin sucursal asignada';
+    const branch = StoreBranchRepository.getById(branchId);
+    if (!branch) return 'Sucursal eliminada';
+    const chain = StoreChainRepository.getById(branch.chainId);
+    return chain ? `${chain.name} — ${branch.name}` : branch.name;
+  }
+
+  // Un solo renderizador de "grupo de items" reutilizado por categoría Y por sucursal (V2-6)
+  // — mismo markup/estilo `.mandado-category` de siempre, ningún dato duplicado ni recalculado
+  // distinto según el modo (mismo `renderItemRow` de siempre).
+  function renderItemGroup(groupLabel, items, effectiveTotal, list) {
     // .mandado-category es una .card solo en escritorio; en móvil pierde el fondo/borde y
     // cada .grocery-item-row pasa a ser su propia tarjeta suelta (ver css/responsive.css
     // <1024px) — así se evita el look de "tarjetas dentro de una tarjeta".
     const card = document.createElement('div');
     card.className = 'mandado-category mb-md';
 
-    const purchasedInCategory = items.filter((i) => i.purchased).length;
+    const purchasedInGroup = items.filter((i) => i.purchased).length;
 
     const header = document.createElement('div');
     header.className = 'mandado-category__header';
     header.innerHTML = `
       <div class="mandado-category__title">
         <span class="mandado-category__bar" aria-hidden="true"></span>
-        <span class="card-title">${escapeHtml(category.name)}</span>
-        <span class="badge badge--neutral">${purchasedInCategory}/${items.length} items</span>
+        <span class="card-title">${escapeHtml(groupLabel)}</span>
+        <span class="badge badge--neutral">${purchasedInGroup}/${items.length} items</span>
       </div>
-      <div class="mandado-category__total">${formatMoney(categoryEffectiveTotal)}</div>
+      <div class="mandado-category__total">${formatMoney(effectiveTotal)}</div>
     `;
     card.appendChild(header);
 
     const itemList = document.createElement('div');
     itemList.className = 'grocery-item-list';
-    items.forEach((item) => itemList.appendChild(renderItemRow(item)));
+    items.forEach((item) => itemList.appendChild(renderItemRow(item, list)));
     card.appendChild(itemList);
 
     return card;
   }
 
-  function renderItemRow(item) {
-    const product = ProductRepository.getById(item.productId);
+  // V2-6 (Parte A — "productos habituales"): sugerencia derivada de historial real, SIN IA
+  // (ver groceryService.js#frequentProductIds). Nunca se preseleccionan solos — cada uno
+  // requiere el "+" explícito del usuario. Se oculta por completo si no hay ningún candidato
+  // pendiente (ya agregado, o sin suficiente historial todavía).
+  function renderFrequentProductsSection(list) {
+    const alreadyAdded = new Set(itemsForList(list.id).map((item) => item.productId));
+    const candidates = [...frequentProductIds()]
+      .filter((id) => !alreadyAdded.has(id))
+      .map((id) => ProductRepository.getById(id))
+      .filter((p) => p && p.status === 'active')
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (!candidates.length) return null;
+
+    const card = document.createElement('div');
+    card.className = 'card mb-md';
+    const header = document.createElement('div');
+    header.className = 'card-title mb-md';
+    header.textContent = 'Productos habituales';
+    card.appendChild(header);
+
+    const list_ = document.createElement('div');
+    list_.className = 'movement-list';
+    candidates.forEach((product) => {
+      const row = document.createElement('div');
+      row.className = 'movement-row';
+
+      const icon = document.createElement('span');
+      icon.className = 'movement-row__icon';
+      icon.innerHTML = iconMarkup('box', { size: 16 });
+
+      const body = document.createElement('div');
+      body.className = 'movement-row__body';
+      body.innerHTML = `<div class="movement-row__title">${escapeHtml(product.name)}</div>`;
+
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'btn btn--icon btn--ghost';
+      addBtn.title = `Agregar ${product.name}`;
+      addBtn.setAttribute('aria-label', `Agregar ${product.name} a la lista`);
+      addBtn.innerHTML = iconMarkup('plus', { size: 18 });
+      addBtn.addEventListener('click', () => addFrequentProduct(product, list));
+
+      row.append(icon, body, addBtn);
+      list_.appendChild(row);
+    });
+    card.appendChild(list_);
+    return card;
+  }
+
+  // Alta rápida de un producto habitual: con EXACTAMENTE 1 variante activa se agrega directo
+  // (sin ambigüedad, mismo criterio que price-form.js#unambiguousVariantId); con 0 o varias
+  // variantes se abre el formulario completo para que el usuario elija — nunca se adivina.
+  function addFrequentProduct(product, list) {
+    const variants = ProductVariantRepository.forProduct(product.id, { includeInactive: false });
+    if (variants.length !== 1) {
+      openGroceryItemForm({ list, onSaved: render });
+      return;
+    }
+    const variant = variants[0];
+    GroceryListItemRepository.create({
+      groceryListId: list.id,
+      productId: product.id,
+      productVariantId: variant.id,
+      categoryId: product.categoryId,
+      quantity: 1,
+      unit: variant.purchaseUnit,
+    });
+    showToast(`${product.name} agregado a la lista`);
+    render();
+  }
+
+  // V2-4: único punto de código que combina "actualizar un item" con "sincronizar su
+  // PriceObservation automática" — mantiene esa responsabilidad fuera de cada handler suelto
+  // (ver js/services/purchaseObservationService.js). Se usa para TODA actualización de item en
+  // este módulo, no solo purchased/actualPrice: si cantidad/unidad cambian después de comprado,
+  // la observación ya creada debe reflejar el monto real correcto, no quedarse desactualizada.
+  function updateItemAndSync(item, patch, list) {
+    const updated = GroceryListItemRepository.update(item.id, patch);
+    const synced = syncPurchaseObservation(updated, list);
+    return { updated, synced };
+  }
+
+  function renderItemRow(item, list) {
+    // V2-1: los items nuevos (y los migrados) tienen productVariantId resuelto; se cae a
+    // productId directo solo como red de seguridad (nunca debería faltar, ver migración V1→V2).
+    const variant = item.productVariantId ? ProductVariantRepository.getById(item.productVariantId) : null;
+    const product = variant ? ProductRepository.getById(variant.productId) : ProductRepository.getById(item.productId);
+    const variantSuffix = variant ? formatVariantSuffix(variant) : '';
+    // V2-3: solo se muestra si el item tiene una sucursal PROPIA (distinta de heredar la de la
+    // lista, ver groceryService.js#effectiveBranchId) — heredar en silencio es justo el punto
+    // de tener una sucursal activa; mostrarla en cada item sería ruido visual innecesario.
+    const overrideBranch = item.selectedBranchId ? StoreBranchRepository.getById(item.selectedBranchId) : null;
+    const nameExtras = [variantSuffix, overrideBranch?.name].filter(Boolean).join(' · ');
     const unitLabel = UNIT_OPTIONS.find((u) => u.value === item.unit)?.label || item.unit;
 
     const row = document.createElement('div');
@@ -359,14 +649,15 @@ export function renderGroceryListModule(container) {
     checkbox.checked = item.purchased;
     checkbox.setAttribute('aria-label', `Marcar ${product?.name || 'producto'} como comprado`);
     checkbox.addEventListener('change', () => {
-      GroceryListItemRepository.update(item.id, { purchased: checkbox.checked });
+      const { synced } = updateItemAndSync(item, { purchased: checkbox.checked }, list);
+      if (synced) showToast('Precio guardado en Historial');
       render();
     });
     checkboxWrap.appendChild(checkbox);
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'grocery-item-row__name';
-    nameSpan.textContent = product?.name || '(producto eliminado)';
+    nameSpan.innerHTML = `${escapeHtml(product?.name || '(producto eliminado)')}${nameExtras ? ` <span class="text-muted text-xs">· ${escapeHtml(nameExtras)}</span>` : ''}`;
 
     const qtyWrap = document.createElement('div');
     qtyWrap.className = 'grocery-item-row__qty-wrap';
@@ -381,7 +672,7 @@ export function renderGroceryListModule(container) {
     qtyInput.addEventListener('change', () => {
       const value = Number(qtyInput.value);
       if (value > 0) {
-        GroceryListItemRepository.update(item.id, { quantity: value });
+        updateItemAndSync(item, { quantity: value }, list);
       } else {
         showToast('La cantidad debe ser mayor a 0.', { type: 'error' });
       }
@@ -393,7 +684,7 @@ export function renderGroceryListModule(container) {
     unitSelect.innerHTML = UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('');
     unitSelect.value = item.unit;
     unitSelect.addEventListener('change', () => {
-      GroceryListItemRepository.update(item.id, { unit: unitSelect.value });
+      updateItemAndSync(item, { unit: unitSelect.value }, list);
       render();
     });
 
@@ -418,7 +709,7 @@ export function renderGroceryListModule(container) {
       if (raw !== '' && !(Number(raw) >= 0)) {
         showToast('El precio estimado no puede ser negativo.', { type: 'error' });
       } else {
-        GroceryListItemRepository.update(item.id, { estimatedPrice: raw === '' ? null : Number(raw) });
+        updateItemAndSync(item, { estimatedPrice: raw === '' ? null : Number(raw) }, list);
       }
       render();
     });
@@ -443,7 +734,8 @@ export function renderGroceryListModule(container) {
       if (raw !== '' && !(Number(raw) >= 0)) {
         showToast('El precio real no puede ser negativo.', { type: 'error' });
       } else {
-        GroceryListItemRepository.update(item.id, { actualPrice: raw === '' ? null : Number(raw) });
+        const { synced } = updateItemAndSync(item, { actualPrice: raw === '' ? null : Number(raw) }, list);
+        if (synced) showToast('Precio guardado en Historial');
       }
       render();
     });
@@ -471,6 +763,10 @@ export function renderGroceryListModule(container) {
         },
       },
       {
+        label: 'Cambiar tienda',
+        onClick: () => openItemBranchForm(item, list),
+      },
+      {
         label: 'Quitar de la lista',
         danger: true,
         onClick: async () => {
@@ -494,68 +790,33 @@ export function renderGroceryListModule(container) {
     return row;
   }
 
-  function openItemForm(list) {
-    // Solo productos ya existentes (ver docs/decisions.md): registrar un producto nuevo es
-    // responsabilidad exclusiva de Mandado > Productos, no de este modal — evita catálogos
-    // duplicados/inconsistentes creados "al vuelo" desde una lista.
-    const products = ProductRepository.list({ includeInactive: false }).sort((a, b) => a.name.localeCompare(b.name));
-    if (!products.length) {
-      showToast('Primero agrega productos en Mandado > Productos.', { type: 'error' });
-      return;
-    }
-    const categories = groceryCategoryRepo.list({ includeInactive: false });
-    const formId = `grocery-item-form-${Date.now()}`;
-
+  // V2-3: "el usuario puede sobrescribir" la sucursal heredada de la lista para un item
+  // puntual. Escribe selectedStoreId/selectedBranchId explícitamente al mismo valor (mismo
+  // criterio ya usado en V2-1 para productId/productVariantId) — nunca solo uno de los dos.
+  function openItemBranchForm(item, list) {
+    const chains = StoreChainRepository.list({ includeInactive: false });
+    const formId = `item-branch-form-${Date.now()}`;
     const form = document.createElement('form');
     form.id = formId;
     form.className = 'form-grid';
+    const activeBranch = list.activeBranchId ? StoreBranchRepository.getById(list.activeBranchId) : null;
     form.innerHTML = `
       <div>
-        <label for="${formId}-product">Producto</label>
-        <select id="${formId}-product" name="productId">
-          ${products.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+        <label for="${formId}-branch">Sucursal para este producto</label>
+        <select id="${formId}-branch" name="branchId">
+          <option value="">Usar la sucursal de la lista${activeBranch ? ` (${escapeHtml(activeBranch.name)})` : ''}</option>
+          ${chains.map((chain) => `
+            <optgroup label="${escapeHtml(chain.name)}">
+              ${StoreBranchRepository.forChain(chain.id, { includeInactive: false }).map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('')}
+            </optgroup>
+          `).join('')}
         </select>
-      </div>
-      <div>
-        <label for="${formId}-category">Categoría</label>
-        <select id="${formId}-category" name="categoryId" disabled>${categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</select>
-      </div>
-      <div class="form-row">
-        <div>
-          <label for="${formId}-quantity">Cantidad</label>
-          <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" value="1" required>
-        </div>
-        <div>
-          <label for="${formId}-unit">Unidad</label>
-          <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
-        </div>
-      </div>
-      <div>
-        <label for="${formId}-price">Precio estimado por unidad (opcional)</label>
-        <input type="number" id="${formId}-price" name="estimatedPrice" min="0" step="0.01">
-      </div>
-      <div>
-        <label for="${formId}-notes">Notas (opcional)</label>
-        <input type="text" id="${formId}-notes" name="notes">
       </div>
       <p class="form-error hidden"></p>
     `;
 
-    const productSelect = form.querySelector(`#${formId}-product`);
-    const categorySelect = form.querySelector(`#${formId}-category`);
-    const unitSelect = form.querySelector(`#${formId}-unit`);
-
-    // Categoría deja de ser una elección manual: es pura referencia, siempre la del producto
-    // seleccionado (obtenida directamente del catálogo ya existente) — por eso el <select>
-    // está disabled y solo se sincroniza por código, nunca por el usuario.
-    function syncProductFields() {
-      const selected = ProductRepository.getById(productSelect.value);
-      if (!selected) return;
-      categorySelect.value = selected.categoryId;
-      unitSelect.value = selected.preferredUnit;
-    }
-    productSelect.addEventListener('change', syncProductFields);
-    syncProductFields();
+    const select = form.querySelector('select');
+    select.value = item.selectedBranchId || '';
 
     const footer = document.createElement('div');
     const cancelBtn = document.createElement('button');
@@ -566,49 +827,63 @@ export function renderGroceryListModule(container) {
     saveBtn.type = 'submit';
     saveBtn.className = 'btn btn--primary';
     saveBtn.setAttribute('form', formId);
-    saveBtn.textContent = 'Agregar producto';
+    saveBtn.textContent = 'Guardar';
     footer.append(cancelBtn, saveBtn);
 
-    const modal = openModal({ title: 'Agregar producto a la lista', content: form, footer });
+    const modal = openModal({ title: 'Cambiar sucursal del producto', content: form, footer });
     cancelBtn.addEventListener('click', () => modal.close());
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      const data = new FormData(form);
-      const productId = data.get('productId');
-      const quantity = data.get('quantity');
-      const unit = data.get('unit');
-      const estimatedPrice = data.get('estimatedPrice');
-      const notes = data.get('notes');
-
-      const { valid, errors } = validate([
-        { valid: isRequired(productId), message: 'Selecciona un producto.' },
-        { valid: isPositiveNumber(quantity), message: 'La cantidad debe ser mayor a 0.' },
-      ]);
-      const errorEl = form.querySelector('.form-error');
-      if (!valid) {
-        errorEl.textContent = errors.join(' ');
-        errorEl.classList.remove('hidden');
-        return;
-      }
-      errorEl.classList.add('hidden');
-
-      const product = ProductRepository.getById(productId);
-
-      GroceryListItemRepository.create({
-        groceryListId: list.id,
-        productId: product.id,
-        categoryId: product.categoryId,
-        quantity,
-        unit,
-        estimatedPrice,
-        notes,
-      });
-
+      const branchId = new FormData(form).get('branchId') || null;
+      const updated = GroceryListItemRepository.update(item.id, { selectedStoreId: branchId, selectedBranchId: branchId });
+      // Si el item ya estaba comprado con precio real, la observación (si existe) debe
+      // reflejar la sucursal correcta — no solo quedarse con la vieja.
+      syncPurchaseObservation(updated, list);
       modal.close();
-      showToast('Producto agregado a la lista');
+      showToast('Sucursal actualizada');
       render();
     });
+  }
+
+  // V2-5: "Nuevo mandado" — repetir el último (con sus productos, cantidades, categorías y
+  // notas, sin nada de compra/precio real) o empezar vacío como siempre. Dos botones grandes,
+  // apilados — pensado para mobile, nada que escribir todavía.
+  function openNewListChoice(lastList) {
+    const content = document.createElement('div');
+    content.className = 'form-grid';
+
+    const intro = document.createElement('p');
+    intro.className = 'text-muted';
+    intro.textContent = '¿Cómo quieres empezar?';
+    content.appendChild(intro);
+
+    const repeatBtn = document.createElement('button');
+    repeatBtn.type = 'button';
+    repeatBtn.className = 'btn btn--primary';
+    repeatBtn.style.width = '100%';
+    repeatBtn.textContent = `Repetir "${lastList.name}"`;
+    repeatBtn.addEventListener('click', () => {
+      const clone = GroceryListRepository.duplicate(lastList.id);
+      modal.close();
+      selectedListId = clone.id;
+      persistSelection();
+      showToast('Lista creada a partir de tu último mandado');
+      render();
+    });
+
+    const emptyBtn = document.createElement('button');
+    emptyBtn.type = 'button';
+    emptyBtn.className = 'btn btn--ghost';
+    emptyBtn.style.width = '100%';
+    emptyBtn.textContent = 'Crear lista vacía';
+    emptyBtn.addEventListener('click', () => {
+      modal.close();
+      openListForm();
+    });
+
+    content.append(repeatBtn, emptyBtn);
+    const modal = openModal({ title: 'Nuevo mandado', content });
   }
 
   function openListForm(existing) {
