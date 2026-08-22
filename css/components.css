@@ -270,7 +270,24 @@
 }
 
 .period-nav__label { text-align: center; }
-.period-nav__jump { display: flex; align-items: center; gap: var(--space-sm); }
+/* V2-8: la etiqueta "Mes Año" es clicable (revela el selector detallado) — reset de botón +
+   mismo feedback hover/transition ya usado en .settings-row--action. */
+.period-nav__label--action {
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  color: inherit;
+  cursor: pointer;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+.period-nav__label--action:hover { background: var(--color-bg); }
+/* flex-wrap: red de seguridad — el selector detallado empieza oculto (ver month-year-nav.js),
+   pero si se revela en una tarjeta muy angosta, mes+año pueden apilarse en 2 líneas en vez de
+   desbordar horizontalmente. */
+.period-nav__jump { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
 .period-nav__jump label { margin: 0; }
 .period-nav__jump input, .period-nav__jump select { width: auto; }
 
@@ -487,8 +504,13 @@
   gap: var(--space-sm);
   padding: var(--space-sm) 0;
   border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
 }
 .grocery-item-row:last-child { border-bottom: none; }
+/* Solo affordance de escritorio (V2-3): en <1024px cada fila ya es su propia tarjeta con
+   fondo/borde propios (ver responsive.css) — ahí este hover no se nota, que es lo esperado. */
+.grocery-item-row:hover { background: var(--color-surface-secondary); }
 
 .grocery-item-row__checkbox-wrap {
   grid-area: check;

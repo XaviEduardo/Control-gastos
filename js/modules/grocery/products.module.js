@@ -1,20 +1,29 @@
+// Catálogo de Mandado (V2-1, ver docs/v2-data-model.md): Product es el concepto general
+// ("Leche"); ProductVariant es el SKU real que efectivamente se compra (marca+presentación+
+// unidad de compra, ej. "Lala · 1.5 L · pieza"). Esta pantalla agrupa: cada Product es una
+// tarjeta con sus ProductVariant listadas debajo. Ningún cálculo vive aquí — WEIGHT/UNIT sigue
+// resolviéndose exclusivamente en groceryService.js sobre lo que ya captura Mi Lista.
+
 import ProductRepository from './product.repository.js';
+import ProductVariantRepository from './product-variant.repository.js';
 import PriceRepository from '../prices/price.repository.js';
+import StoreChainRepository from '../stores/store-chain.repository.js';
+import StoreBranchRepository from '../stores/store-branch.repository.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
-import { renderTable } from '../../components/table.js';
 import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { renderEmptyState } from '../../components/empty-state.js';
+import { iconMarkup } from '../../components/icons.js';
 import { openModal } from '../../components/modal.js';
 import { openCategoryManager } from '../../components/category-manager.js';
 import { showToast } from '../../components/toast.js';
 import { normalizePrice, formatNormalizedPrice } from '../../services/priceService.js';
+import { navigateTo } from '../../core/router.js';
 import { parseFlexibleDate } from '../../core/dates.js';
 import { isRequired, validate, escapeHtml } from '../../core/validators.js';
 import { UNIT_OPTIONS } from './units.js';
+import { formatVariantLabel } from './variant-format.js';
 
 const categoryRepo = createCategoryRepository('groceryCategories');
-
-const UNIT_PHRASES = { kg: 'Por kg', g: 'Por gramo', l: 'Por litro', ml: 'Por mililitro', pza: 'Por unidad', paquete: 'Por paquete' };
 
 export function renderGroceryProductsModule(container) {
   ensureActionMenuOutsideClick();
@@ -25,14 +34,23 @@ export function renderGroceryProductsModule(container) {
 
   const activeCategories = () => categoryRepo.list({ includeInactive: false });
   const categoryName = (id) => categoryRepo.list().find((c) => c.id === id)?.name || 'Sin categoría';
-  const unitLabel = (value) => UNIT_OPTIONS.find((u) => u.value === value)?.label || value;
-  const unitPhrase = (value) => UNIT_PHRASES[value] || `Por ${unitLabel(value)}`;
 
-  // Precio más reciente registrado para el producto (cualquier tienda) — mismo patrón que
-  // ya usa price-history.module.js (encontrar el registro más nuevo por fecha), sin tocar
-  // ninguna regla de cálculo. null si nunca se ha registrado un precio.
+  // Último precio registrado para CUALQUIER variante de este producto (cualquier tienda) —
+  // sigue leyendo por `productId` (Price lo conserva siempre, ver migración V1→V2), mismo
+  // patrón de siempre, ninguna regla de cálculo nueva.
   function latestPriceInfo(productId) {
     const entries = PriceRepository.forProduct(productId);
+    if (!entries.length) return null;
+    const latest = entries.reduce((best, e) => (
+      !best || parseFlexibleDate(e.date) > parseFlexibleDate(best.date) ? e : best
+    ), null);
+    return { entry: latest, normalized: normalizePrice(latest.price, latest.quantity, latest.unit) };
+  }
+
+  // Último precio registrado específicamente para ESTA variante (solo prices que ya se
+  // capturaron con productVariantId resuelto sin ambigüedad — ver price-form.js).
+  function latestVariantPriceInfo(variantId) {
+    const entries = PriceRepository.all().filter((p) => p.productVariantId === variantId);
     if (!entries.length) return null;
     const latest = entries.reduce((best, e) => (
       !best || parseFlexibleDate(e.date) > parseFlexibleDate(best.date) ? e : best
@@ -72,7 +90,7 @@ export function renderGroceryProductsModule(container) {
         <select aria-label="Filtrar por categoría"></select>
       </div>
       <div class="flex gap-sm">
-        <button type="button" class="btn btn--ghost">Gestionar categorías</button>
+        <button type="button" class="btn btn--icon btn--ghost" title="Gestionar categorías" aria-label="Gestionar categorías"></button>
         <button type="button" class="btn btn--primary">+ Agregar producto</button>
       </div>
     `;
@@ -80,6 +98,7 @@ export function renderGroceryProductsModule(container) {
     const [searchInput] = toolbar.querySelectorAll('input');
     const [categorySelect] = toolbar.querySelectorAll('select');
     const [manageBtn, addBtn] = toolbar.querySelectorAll('button');
+    manageBtn.innerHTML = iconMarkup('tag', { size: 18 });
 
     searchInput.value = view.search;
     categorySelect.innerHTML = '<option value="all">Todas las categorías</option>'
@@ -124,85 +143,112 @@ export function renderGroceryProductsModule(container) {
       });
     }
 
-    return renderTable({
-      columns: [
-        { key: 'name', label: 'Producto' },
-        { key: 'categoryId', label: 'Categoría', render: (row) => escapeHtml(categoryName(row.categoryId)) },
-        { key: 'preferredUnit', label: 'Presentación', render: (row) => escapeHtml(unitPhrase(row.preferredUnit)) },
-        {
-          key: 'lastPrice',
-          label: 'Último precio',
-          align: 'right',
-          render: (row) => {
-            const info = latestPriceInfo(row.id);
-            return info?.normalized ? escapeHtml(formatNormalizedPrice(info.normalized)) : '<span class="text-muted">Sin registrar</span>';
-          },
-        },
-        { key: 'status', label: 'Estado', render: (row) => statusBadge(row.status) },
-      ],
-      rows: products,
-      rowActions: (row) => buildRowActions(row),
-      renderCard: (row, actions) => renderProductCard(row, actions),
-    });
+    const wrap = document.createElement('div');
+    products.forEach((product) => wrap.appendChild(renderProductCard(product)));
+    return wrap;
   }
 
-  function statusBadge(status) {
-    return status === 'active'
-      ? '<span class="badge badge--success">Activo</span>'
-      : '<span class="badge badge--neutral">Inactivo</span>';
-  }
+  function renderProductCard(product) {
+    const card = document.createElement('div');
+    card.className = 'card mb-md';
 
-  function buildRowActions(row) {
-    return createActionMenu(`Más acciones para ${row.name}`, [
-      { label: 'Editar', onClick: () => openProductForm(row) },
+    const header = document.createElement('div');
+    header.className = 'flex justify-between items-start gap-sm mb-md';
+    header.style.flexWrap = 'wrap';
+
+    const titleWrap = document.createElement('div');
+    const info = latestPriceInfo(product.id);
+    titleWrap.innerHTML = `
+      <div class="card-title">${escapeHtml(product.name)}</div>
+      <div class="text-muted text-xs mt-md">
+        ${escapeHtml(categoryName(product.categoryId))}${product.status === 'inactive' ? ' · <span class="badge badge--neutral">Inactivo</span>' : ''}
+        ${info?.normalized ? ` · Último precio: ${escapeHtml(formatNormalizedPrice(info.normalized))}` : ''}
+      </div>
+    `;
+
+    const actions = document.createElement('div');
+    actions.className = 'flex gap-sm items-center';
+
+    const addVariantBtn = document.createElement('button');
+    addVariantBtn.type = 'button';
+    addVariantBtn.className = 'btn btn--icon btn--ghost';
+    addVariantBtn.title = 'Agregar variante';
+    addVariantBtn.setAttribute('aria-label', `Agregar variante a ${product.name}`);
+    addVariantBtn.innerHTML = iconMarkup('plus', { size: 18 });
+    addVariantBtn.addEventListener('click', () => openVariantForm(product));
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn btn--icon btn--ghost';
+    editBtn.title = 'Editar producto';
+    editBtn.setAttribute('aria-label', `Editar ${product.name}`);
+    editBtn.innerHTML = iconMarkup('edit', { size: 18 });
+    editBtn.addEventListener('click', () => openProductForm(product));
+
+    const menu = createActionMenu(`Más acciones para ${product.name}`, [
       {
-        label: row.status === 'active' ? 'Desactivar' : 'Activar',
+        label: product.status === 'active' ? 'Desactivar' : 'Activar',
         onClick: () => {
-          ProductRepository.setStatus(row.id, row.status === 'active' ? 'inactive' : 'active');
-          showToast(row.status === 'active' ? 'Producto desactivado' : 'Producto activado');
+          ProductRepository.setStatus(product.id, product.status === 'active' ? 'inactive' : 'active');
+          showToast(product.status === 'active' ? 'Producto desactivado' : 'Producto activado');
           render();
         },
       },
     ]);
+
+    actions.append(addVariantBtn, editBtn, menu);
+    header.append(titleWrap, actions);
+    card.appendChild(header);
+
+    const variants = ProductVariantRepository.forProduct(product.id);
+    if (!variants.length) {
+      const empty = document.createElement('p');
+      empty.className = 'text-muted';
+      empty.textContent = 'Sin variantes todavía — agrega al menos una para poder usarlo en tus listas de mandado.';
+      card.appendChild(empty);
+      return card;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'movement-list';
+    variants.forEach((variant) => list.appendChild(renderVariantRow(product, variant)));
+    card.appendChild(list);
+
+    return card;
   }
 
-  function renderProductCard(row, actions) {
-    const card = document.createElement('div');
-    card.className = 'responsive-card-list__item';
+  function renderVariantRow(product, variant) {
+    const row = document.createElement('div');
+    row.className = 'movement-row';
 
-    const header = document.createElement('div');
-    header.className = 'responsive-card-list__header';
-    const title = document.createElement('span');
-    title.className = 'responsive-card-list__title';
-    title.textContent = row.name;
-    header.append(title, actions);
+    const icon = document.createElement('span');
+    icon.className = 'movement-row__icon';
+    icon.innerHTML = iconMarkup('box', { size: 16 });
 
-    const subtitle = document.createElement('div');
-    subtitle.className = 'responsive-card-list__subtitle';
-    subtitle.textContent = categoryName(row.categoryId);
-
+    const info = latestVariantPriceInfo(variant.id);
     const body = document.createElement('div');
-    body.className = 'responsive-card-list__body';
+    body.className = 'movement-row__body';
+    body.innerHTML = `
+      <div class="movement-row__title">${escapeHtml(formatVariantLabel(variant))}${variant.status === 'inactive' ? ' <span class="badge badge--neutral">Inactivo</span>' : ''}</div>
+      <div class="movement-row__subtitle">${info?.normalized ? escapeHtml(formatNormalizedPrice(info.normalized)) : 'Sin precio registrado'}</div>
+    `;
 
-    const unitLine = document.createElement('span');
-    unitLine.textContent = unitPhrase(row.preferredUnit);
-    body.appendChild(unitLine);
+    const menu = createActionMenu(`Más acciones para ${formatVariantLabel(variant)}`, [
+      { label: 'Editar', onClick: () => openVariantForm(product, variant) },
+      { label: 'Preferir sucursal...', onClick: () => openPreferredBranchForm(variant) },
+      { label: 'Ver historial de precios', onClick: () => navigateTo('/mandado/historial') },
+      {
+        label: variant.status === 'active' ? 'Desactivar' : 'Activar',
+        onClick: () => {
+          ProductVariantRepository.setStatus(variant.id, variant.status === 'active' ? 'inactive' : 'active');
+          showToast(variant.status === 'active' ? 'Variante desactivada' : 'Variante activada');
+          render();
+        },
+      },
+    ]);
 
-    const priceRow = document.createElement('div');
-    priceRow.className = 'flex justify-between items-center mt-md';
-    const info = latestPriceInfo(row.id);
-    priceRow.innerHTML = info?.normalized
-      ? `<span class="text-muted">Último precio</span><span style="font-weight:700">${escapeHtml(formatNormalizedPrice(info.normalized))}</span>`
-      : '<span class="text-muted">Sin precio registrado</span>';
-    body.appendChild(priceRow);
-
-    const statusRow = document.createElement('div');
-    statusRow.className = 'mt-md';
-    statusRow.innerHTML = statusBadge(row.status);
-    body.appendChild(statusRow);
-
-    card.append(header, subtitle, body);
-    return card;
+    row.append(icon, body, menu);
+    return row;
   }
 
   function openProductForm(existing) {
@@ -226,10 +272,6 @@ export function renderGroceryProductsModule(container) {
         <select id="${formId}-category" name="categoryId"></select>
       </div>
       <div>
-        <label for="${formId}-unit">Unidad preferida</label>
-        <select id="${formId}-unit" name="preferredUnit"></select>
-      </div>
-      <div>
         <label for="${formId}-notes">Notas (opcional)</label>
         <textarea id="${formId}-notes" name="notes" rows="2">${escapeHtml(existing?.notes || '')}</textarea>
       </div>
@@ -239,10 +281,6 @@ export function renderGroceryProductsModule(container) {
     const categorySelect = form.querySelector(`#${formId}-category`);
     categorySelect.innerHTML = activeCategories().map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     if (existing?.categoryId) categorySelect.value = existing.categoryId;
-
-    const unitSelect = form.querySelector(`#${formId}-unit`);
-    unitSelect.innerHTML = UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('');
-    unitSelect.value = existing?.preferredUnit || 'pza';
 
     const footer = document.createElement('div');
     const cancelBtn = document.createElement('button');
@@ -265,7 +303,6 @@ export function renderGroceryProductsModule(container) {
       const payload = {
         name: data.get('name'),
         categoryId: data.get('categoryId'),
-        preferredUnit: data.get('preferredUnit'),
         notes: data.get('notes'),
       };
 
@@ -287,6 +324,148 @@ export function renderGroceryProductsModule(container) {
 
       modal.close();
       showToast(existing ? 'Producto actualizado' : 'Producto agregado');
+      render();
+    });
+  }
+
+  function openVariantForm(product, existing) {
+    const formId = `product-variant-form-${Date.now()}`;
+    const form = document.createElement('form');
+    form.id = formId;
+    form.className = 'form-grid';
+    form.innerHTML = `
+      <div class="flex items-center gap-sm">
+        <span class="text-muted">Producto</span>
+        <span class="card-title">${escapeHtml(product.name)}</span>
+      </div>
+      <div>
+        <label for="${formId}-brand">Marca (opcional)</label>
+        <input type="text" id="${formId}-brand" name="brand" value="${escapeHtml(existing?.brand || '')}" placeholder="Ej. Lala">
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="${formId}-amount">Presentación (opcional)</label>
+          <input type="number" id="${formId}-amount" name="presentationAmount" min="0" step="0.01" value="${existing?.presentationAmount ?? ''}" placeholder="Ej. 1.5">
+        </div>
+        <div>
+          <label for="${formId}-presentation-unit">Unidad de presentación</label>
+          <select id="${formId}-presentation-unit" name="presentationUnit"></select>
+        </div>
+      </div>
+      <div>
+        <label for="${formId}-purchase-unit">Unidad de compra</label>
+        <select id="${formId}-purchase-unit" name="purchaseUnit"></select>
+      </div>
+      <div>
+        <label for="${formId}-notes">Notas (opcional)</label>
+        <textarea id="${formId}-notes" name="notes" rows="2">${escapeHtml(existing?.notes || '')}</textarea>
+      </div>
+      <p class="form-error hidden"></p>
+    `;
+
+    const presentationUnitSelect = form.querySelector(`#${formId}-presentation-unit`);
+    presentationUnitSelect.innerHTML = '<option value="">Sin especificar</option>'
+      + UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('');
+    presentationUnitSelect.value = existing?.presentationUnit || '';
+
+    const purchaseUnitSelect = form.querySelector(`#${formId}-purchase-unit`);
+    purchaseUnitSelect.innerHTML = UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('');
+    purchaseUnitSelect.value = existing?.purchaseUnit || 'pza';
+
+    const footer = document.createElement('div');
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn btn--ghost';
+    cancelBtn.textContent = 'Cancelar';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'submit';
+    saveBtn.className = 'btn btn--primary';
+    saveBtn.setAttribute('form', formId);
+    saveBtn.textContent = existing ? 'Guardar cambios' : 'Agregar variante';
+    footer.append(cancelBtn, saveBtn);
+
+    const modal = openModal({ title: existing ? 'Editar variante' : 'Agregar variante', content: form, footer });
+    cancelBtn.addEventListener('click', () => modal.close());
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const payload = {
+        brand: data.get('brand'),
+        presentationAmount: data.get('presentationAmount'),
+        presentationUnit: data.get('presentationUnit') || null,
+        purchaseUnit: data.get('purchaseUnit'),
+        notes: data.get('notes'),
+      };
+
+      const { valid, errors } = validate([
+        { valid: isRequired(payload.purchaseUnit), message: 'Selecciona la unidad de compra.' },
+      ]);
+      const errorEl = form.querySelector('.form-error');
+      if (!valid) {
+        errorEl.textContent = errors.join(' ');
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      errorEl.classList.add('hidden');
+
+      if (existing) ProductVariantRepository.update(existing.id, payload);
+      else ProductVariantRepository.create({ ...payload, productId: product.id });
+
+      modal.close();
+      showToast(existing ? 'Variante actualizada' : 'Variante agregada');
+      render();
+    });
+  }
+
+  // V2-6: "preferir esta sucursal" — sugerencia opcional, nunca obligatoria (ver
+  // groceryService.js#effectiveBranchId, que la usa como último escalón de prioridad).
+  // "Sin preferencia" limpia `preferredBranchId` sin dejar de poder usarlo después.
+  function openPreferredBranchForm(variant) {
+    const chains = StoreChainRepository.list({ includeInactive: false });
+    const formId = `variant-preferred-branch-form-${Date.now()}`;
+    const form = document.createElement('form');
+    form.id = formId;
+    form.className = 'form-grid';
+    form.innerHTML = `
+      <div>
+        <label for="${formId}-branch">Sucursal preferida</label>
+        <select id="${formId}-branch" name="branchId">
+          <option value="">Sin preferencia</option>
+          ${chains.map((chain) => `
+            <optgroup label="${escapeHtml(chain.name)}">
+              ${StoreBranchRepository.forChain(chain.id, { includeInactive: false }).map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('')}
+            </optgroup>
+          `).join('')}
+        </select>
+      </div>
+      <p class="text-muted text-xs">Se usa como sugerencia al agregar este producto a una lista — nunca impide elegir otra sucursal.</p>
+    `;
+
+    const select = form.querySelector('select');
+    select.value = variant.preferredBranchId || '';
+
+    const footer = document.createElement('div');
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn btn--ghost';
+    cancelBtn.textContent = 'Cancelar';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'submit';
+    saveBtn.className = 'btn btn--primary';
+    saveBtn.setAttribute('form', formId);
+    saveBtn.textContent = 'Guardar';
+    footer.append(cancelBtn, saveBtn);
+
+    const modal = openModal({ title: 'Sucursal preferida', content: form, footer });
+    cancelBtn.addEventListener('click', () => modal.close());
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const branchId = new FormData(form).get('branchId') || null;
+      ProductVariantRepository.update(variant.id, { preferredBranchId: branchId });
+      modal.close();
+      showToast(branchId ? 'Sucursal preferida guardada' : 'Preferencia de sucursal eliminada');
       render();
     });
   }

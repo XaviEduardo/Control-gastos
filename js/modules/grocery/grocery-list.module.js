@@ -4,29 +4,32 @@
 
 import State from '../../core/state.js';
 import GroceryListRepository from './grocery-list.repository.js';
-import GroceryListItemRepository from './grocery-list-item.repository.js';
-import ProductRepository from './product.repository.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import ExpenseRepository from '../expenses/expense.repository.js';
-import { itemsForList, categoryTotals, listTotals, itemEffectiveSubtotal } from '../../services/groceryService.js';
+import { listTotals } from '../../services/groceryService.js';
 import { renderEmptyState } from '../../components/empty-state.js';
-import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
+import { ensureActionMenuOutsideClick } from '../../components/action-menu.js';
 import { iconMarkup } from '../../components/icons.js';
 import { openModal } from '../../components/modal.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
 import { formatMoney, formatPercent } from '../../core/currency.js';
 import { toISODate, formatDateShort } from '../../core/dates.js';
-import { isRequired, isPositiveNumber, validate, escapeHtml } from '../../core/validators.js';
-import { UNIT_OPTIONS } from './units.js';
+import { isRequired, validate, escapeHtml } from '../../core/validators.js';
+import { renderBranchSection } from './grocery-branch-section.js';
+import { renderItemsByCategory, renderFrequentProductsSection } from './grocery-item-groups.js';
 
-const groceryCategoryRepo = createCategoryRepository('groceryCategories');
 const expenseCategoryRepo = createCategoryRepository('expenseCategories');
 
 export function renderGroceryListModule(container) {
   ensureActionMenuOutsideClick();
   const settings = State.getSettings();
   let selectedListId = settings.selectedGroceryListId || null;
+  // V2-3/V2-6: nada de esto es persistente (ver docs/v2-data-model.md — GroceryList.
+  // activeBranchId es lo persistente); `branchPickerOpen` controla si el picker de sucursal
+  // está expandido y `groupMode` si Mi Lista se ve por categoría o por sucursal — ambos son
+  // preferencias de esta sesión de UI, no del modelo de datos.
+  const view = { branchPickerOpen: false, groupMode: 'category' };
 
   const root = document.createElement('div');
   root.className = 'module-view';
@@ -67,7 +70,10 @@ export function renderGroceryListModule(container) {
 
     const list = GroceryListRepository.getById(selectedListId);
     root.appendChild(renderTotalsSummary(list));
-    root.appendChild(renderItemsByCategory(list));
+    root.appendChild(renderBranchSection(list, view, { onChange: render }));
+    const frequentSection = renderFrequentProductsSection(list, { onChange: render });
+    if (frequentSection) root.appendChild(frequentSection);
+    root.appendChild(renderItemsByCategory(list, view, { onChange: render }));
   }
 
   function renderHeader() {
@@ -111,7 +117,13 @@ export function renderGroceryListModule(container) {
     newBtn.title = 'Nueva lista';
     newBtn.setAttribute('aria-label', 'Nueva lista');
     newBtn.innerHTML = iconMarkup('plus', { size: 18 });
-    newBtn.addEventListener('click', () => openListForm());
+    // V2-5: si ya existe al menos un mandado, ofrece repetirlo antes de ir directo al
+    // formulario vacío — "reducir drásticamente el trabajo" de armar cada lista desde cero.
+    newBtn.addEventListener('click', () => {
+      const existingLists = currentLists();
+      if (existingLists.length) openNewListChoice(existingLists[0]);
+      else openListForm();
+    });
     actions.appendChild(newBtn);
 
     if (selectedListId) {
@@ -284,331 +296,44 @@ export function renderGroceryListModule(container) {
     return card;
   }
 
-  function renderItemsByCategory(list) {
-    const wrap = document.createElement('div');
-    const totals = categoryTotals(list.id);
+  // V2-5: "Nuevo mandado" — repetir el último (con sus productos, cantidades, categorías y
+  // notas, sin nada de compra/precio real) o empezar vacío como siempre. Dos botones grandes,
+  // apilados — pensado para mobile, nada que escribir todavía.
+  function openNewListChoice(lastList) {
+    const content = document.createElement('div');
+    content.className = 'form-grid';
 
-    const addBar = document.createElement('div');
-    addBar.className = 'flex justify-end mb-md';
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'btn btn--primary';
-    addBtn.textContent = '+ Agregar producto';
-    addBtn.addEventListener('click', () => openItemForm(list));
-    addBar.appendChild(addBtn);
-    wrap.appendChild(addBar);
+    const intro = document.createElement('p');
+    intro.className = 'text-muted';
+    intro.textContent = '¿Cómo quieres empezar?';
+    content.appendChild(intro);
 
-    if (!totals.length) {
-      wrap.appendChild(renderEmptyState({
-        icon: '🥕',
-        title: 'Esta lista todavía no tiene productos',
-        message: 'Agrega tu primer producto con el botón de arriba.',
-      }));
-      return wrap;
-    }
-
-    totals.forEach(({ category, effective }) => {
-      const items = itemsForList(list.id).filter((i) => i.categoryId === category.id);
-      if (!items.length) return;
-      wrap.appendChild(renderCategoryGroup(list, category, items, effective));
-    });
-
-    return wrap;
-  }
-
-  function renderCategoryGroup(list, category, items, categoryEffectiveTotal) {
-    // .mandado-category es una .card solo en escritorio; en móvil pierde el fondo/borde y
-    // cada .grocery-item-row pasa a ser su propia tarjeta suelta (ver css/responsive.css
-    // <1024px) — así se evita el look de "tarjetas dentro de una tarjeta".
-    const card = document.createElement('div');
-    card.className = 'mandado-category mb-md';
-
-    const purchasedInCategory = items.filter((i) => i.purchased).length;
-
-    const header = document.createElement('div');
-    header.className = 'mandado-category__header';
-    header.innerHTML = `
-      <div class="mandado-category__title">
-        <span class="mandado-category__bar" aria-hidden="true"></span>
-        <span class="card-title">${escapeHtml(category.name)}</span>
-        <span class="badge badge--neutral">${purchasedInCategory}/${items.length} items</span>
-      </div>
-      <div class="mandado-category__total">${formatMoney(categoryEffectiveTotal)}</div>
-    `;
-    card.appendChild(header);
-
-    const itemList = document.createElement('div');
-    itemList.className = 'grocery-item-list';
-    items.forEach((item) => itemList.appendChild(renderItemRow(item)));
-    card.appendChild(itemList);
-
-    return card;
-  }
-
-  function renderItemRow(item) {
-    const product = ProductRepository.getById(item.productId);
-    const unitLabel = UNIT_OPTIONS.find((u) => u.value === item.unit)?.label || item.unit;
-
-    const row = document.createElement('div');
-    row.className = `grocery-item-row${item.purchased ? ' grocery-item-row--purchased' : ''}`;
-
-    const checkboxWrap = document.createElement('label');
-    checkboxWrap.className = 'grocery-item-row__checkbox-wrap';
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = item.purchased;
-    checkbox.setAttribute('aria-label', `Marcar ${product?.name || 'producto'} como comprado`);
-    checkbox.addEventListener('change', () => {
-      GroceryListItemRepository.update(item.id, { purchased: checkbox.checked });
-      render();
-    });
-    checkboxWrap.appendChild(checkbox);
-
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'grocery-item-row__name';
-    nameSpan.textContent = product?.name || '(producto eliminado)';
-
-    const qtyWrap = document.createElement('div');
-    qtyWrap.className = 'grocery-item-row__qty-wrap';
-
-    const qtyInput = document.createElement('input');
-    qtyInput.type = 'number';
-    qtyInput.min = '0';
-    qtyInput.step = '0.01';
-    qtyInput.value = item.quantity;
-    qtyInput.className = 'grocery-item-row__qty';
-    qtyInput.setAttribute('aria-label', 'Cantidad');
-    qtyInput.addEventListener('change', () => {
-      const value = Number(qtyInput.value);
-      if (value > 0) {
-        GroceryListItemRepository.update(item.id, { quantity: value });
-      } else {
-        showToast('La cantidad debe ser mayor a 0.', { type: 'error' });
-      }
-      render();
-    });
-
-    const unitSelect = document.createElement('select');
-    unitSelect.setAttribute('aria-label', 'Unidad');
-    unitSelect.innerHTML = UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('');
-    unitSelect.value = item.unit;
-    unitSelect.addEventListener('change', () => {
-      GroceryListItemRepository.update(item.id, { unit: unitSelect.value });
-      render();
-    });
-
-    qtyWrap.append(qtyInput, unitSelect);
-
-    const estField = document.createElement('div');
-    estField.className = 'grocery-item-row__field grocery-item-row__field--est';
-    const estLabel = document.createElement('span');
-    estLabel.className = 'grocery-item-row__field-label';
-    estLabel.textContent = `Est./${unitLabel}`;
-
-    const estInput = document.createElement('input');
-    estInput.type = 'number';
-    estInput.min = '0';
-    estInput.step = '0.01';
-    estInput.placeholder = 'Precio est.';
-    estInput.value = item.estimatedPrice ?? '';
-    estInput.className = 'grocery-item-row__price';
-    estInput.setAttribute('aria-label', 'Precio estimado por unidad');
-    estInput.addEventListener('change', () => {
-      const raw = estInput.value;
-      if (raw !== '' && !(Number(raw) >= 0)) {
-        showToast('El precio estimado no puede ser negativo.', { type: 'error' });
-      } else {
-        GroceryListItemRepository.update(item.id, { estimatedPrice: raw === '' ? null : Number(raw) });
-      }
-      render();
-    });
-    estField.append(estLabel, estInput);
-
-    const realField = document.createElement('div');
-    realField.className = 'grocery-item-row__field grocery-item-row__field--real';
-    const realLabel = document.createElement('span');
-    realLabel.className = 'grocery-item-row__field-label';
-    realLabel.textContent = `Real/${unitLabel}`;
-
-    const actualInput = document.createElement('input');
-    actualInput.type = 'number';
-    actualInput.min = '0';
-    actualInput.step = '0.01';
-    actualInput.placeholder = 'Precio real';
-    actualInput.value = item.actualPrice ?? '';
-    actualInput.className = 'grocery-item-row__price';
-    actualInput.setAttribute('aria-label', 'Precio real por unidad');
-    actualInput.addEventListener('change', () => {
-      const raw = actualInput.value;
-      if (raw !== '' && !(Number(raw) >= 0)) {
-        showToast('El precio real no puede ser negativo.', { type: 'error' });
-      } else {
-        GroceryListItemRepository.update(item.id, { actualPrice: raw === '' ? null : Number(raw) });
-      }
-      render();
-    });
-    realField.append(realLabel, actualInput);
-
-    const subtotalWrap = document.createElement('div');
-    subtotalWrap.className = 'grocery-item-row__subtotal-wrap';
-    const subtotalLabel = document.createElement('span');
-    subtotalLabel.className = 'grocery-item-row__subtotal-label';
-    subtotalLabel.textContent = 'Subtotal';
-    const subtotalSpan = document.createElement('span');
-    subtotalSpan.className = 'grocery-item-row__subtotal';
-    subtotalSpan.textContent = formatMoney(itemEffectiveSubtotal(item));
-    subtotalWrap.append(subtotalLabel, subtotalSpan);
-
-    const menu = createActionMenu(`Más acciones para ${product?.name || 'producto'}`, [
-      {
-        label: 'Notas',
-        onClick: () => {
-          const value = window.prompt('Notas', item.notes || '');
-          if (value !== null) {
-            GroceryListItemRepository.update(item.id, { notes: value });
-            render();
-          }
-        },
-      },
-      {
-        label: 'Quitar de la lista',
-        danger: true,
-        onClick: async () => {
-          const confirmed = await confirmDialog({
-            title: 'Quitar producto',
-            message: `¿Quitar "${product?.name || ''}" de esta lista?`,
-            confirmText: 'Quitar',
-            danger: true,
-          });
-          if (confirmed) {
-            GroceryListItemRepository.remove(item.id);
-            showToast('Producto quitado de la lista');
-            render();
-          }
-        },
-      },
-    ]);
-    menu.classList.add('grocery-item-row__menu');
-
-    row.append(checkboxWrap, nameSpan, qtyWrap, estField, realField, subtotalWrap, menu);
-    return row;
-  }
-
-  function openItemForm(list) {
-    // Solo productos ya existentes (ver docs/decisions.md): registrar un producto nuevo es
-    // responsabilidad exclusiva de Mandado > Productos, no de este modal — evita catálogos
-    // duplicados/inconsistentes creados "al vuelo" desde una lista.
-    const products = ProductRepository.list({ includeInactive: false }).sort((a, b) => a.name.localeCompare(b.name));
-    if (!products.length) {
-      showToast('Primero agrega productos en Mandado > Productos.', { type: 'error' });
-      return;
-    }
-    const categories = groceryCategoryRepo.list({ includeInactive: false });
-    const formId = `grocery-item-form-${Date.now()}`;
-
-    const form = document.createElement('form');
-    form.id = formId;
-    form.className = 'form-grid';
-    form.innerHTML = `
-      <div>
-        <label for="${formId}-product">Producto</label>
-        <select id="${formId}-product" name="productId">
-          ${products.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <label for="${formId}-category">Categoría</label>
-        <select id="${formId}-category" name="categoryId" disabled>${categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</select>
-      </div>
-      <div class="form-row">
-        <div>
-          <label for="${formId}-quantity">Cantidad</label>
-          <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" value="1" required>
-        </div>
-        <div>
-          <label for="${formId}-unit">Unidad</label>
-          <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
-        </div>
-      </div>
-      <div>
-        <label for="${formId}-price">Precio estimado por unidad (opcional)</label>
-        <input type="number" id="${formId}-price" name="estimatedPrice" min="0" step="0.01">
-      </div>
-      <div>
-        <label for="${formId}-notes">Notas (opcional)</label>
-        <input type="text" id="${formId}-notes" name="notes">
-      </div>
-      <p class="form-error hidden"></p>
-    `;
-
-    const productSelect = form.querySelector(`#${formId}-product`);
-    const categorySelect = form.querySelector(`#${formId}-category`);
-    const unitSelect = form.querySelector(`#${formId}-unit`);
-
-    // Categoría deja de ser una elección manual: es pura referencia, siempre la del producto
-    // seleccionado (obtenida directamente del catálogo ya existente) — por eso el <select>
-    // está disabled y solo se sincroniza por código, nunca por el usuario.
-    function syncProductFields() {
-      const selected = ProductRepository.getById(productSelect.value);
-      if (!selected) return;
-      categorySelect.value = selected.categoryId;
-      unitSelect.value = selected.preferredUnit;
-    }
-    productSelect.addEventListener('change', syncProductFields);
-    syncProductFields();
-
-    const footer = document.createElement('div');
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'btn btn--ghost';
-    cancelBtn.textContent = 'Cancelar';
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'submit';
-    saveBtn.className = 'btn btn--primary';
-    saveBtn.setAttribute('form', formId);
-    saveBtn.textContent = 'Agregar producto';
-    footer.append(cancelBtn, saveBtn);
-
-    const modal = openModal({ title: 'Agregar producto a la lista', content: form, footer });
-    cancelBtn.addEventListener('click', () => modal.close());
-
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const data = new FormData(form);
-      const productId = data.get('productId');
-      const quantity = data.get('quantity');
-      const unit = data.get('unit');
-      const estimatedPrice = data.get('estimatedPrice');
-      const notes = data.get('notes');
-
-      const { valid, errors } = validate([
-        { valid: isRequired(productId), message: 'Selecciona un producto.' },
-        { valid: isPositiveNumber(quantity), message: 'La cantidad debe ser mayor a 0.' },
-      ]);
-      const errorEl = form.querySelector('.form-error');
-      if (!valid) {
-        errorEl.textContent = errors.join(' ');
-        errorEl.classList.remove('hidden');
-        return;
-      }
-      errorEl.classList.add('hidden');
-
-      const product = ProductRepository.getById(productId);
-
-      GroceryListItemRepository.create({
-        groceryListId: list.id,
-        productId: product.id,
-        categoryId: product.categoryId,
-        quantity,
-        unit,
-        estimatedPrice,
-        notes,
-      });
-
+    const repeatBtn = document.createElement('button');
+    repeatBtn.type = 'button';
+    repeatBtn.className = 'btn btn--primary';
+    repeatBtn.style.width = '100%';
+    repeatBtn.textContent = `Repetir "${lastList.name}"`;
+    repeatBtn.addEventListener('click', () => {
+      const clone = GroceryListRepository.duplicate(lastList.id);
       modal.close();
-      showToast('Producto agregado a la lista');
+      selectedListId = clone.id;
+      persistSelection();
+      showToast('Lista creada a partir de tu último mandado');
       render();
     });
+
+    const emptyBtn = document.createElement('button');
+    emptyBtn.type = 'button';
+    emptyBtn.className = 'btn btn--ghost';
+    emptyBtn.style.width = '100%';
+    emptyBtn.textContent = 'Crear lista vacía';
+    emptyBtn.addEventListener('click', () => {
+      modal.close();
+      openListForm();
+    });
+
+    content.append(repeatBtn, emptyBtn);
+    const modal = openModal({ title: 'Nuevo mandado', content });
   }
 
   function openListForm(existing) {

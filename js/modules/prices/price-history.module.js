@@ -11,18 +11,27 @@ import { renderEmptyState } from '../../components/empty-state.js';
 import { renderTable } from '../../components/table.js';
 import { renderStatCard } from '../../components/stat-card.js';
 import { createActionMenu, ensureActionMenuOutsideClick } from '../../components/action-menu.js';
-import { openModal } from '../../components/modal.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
 import { formatMoney } from '../../core/currency.js';
-import { formatDateShort, toISODate, parseFlexibleDate } from '../../core/dates.js';
-import { isRequired, isPositiveNumber, isValidDate, validate, escapeHtml } from '../../core/validators.js';
+import { formatDateShort, parseFlexibleDate } from '../../core/dates.js';
+import { escapeHtml } from '../../core/validators.js';
 import { UNIT_OPTIONS } from '../grocery/units.js';
+import { openPriceForm } from './price-form.js';
 
 const CHART_COLORS = ['#4F46E5', '#17A567', '#C98A1E', '#DC4949', '#6b7280', '#0ea5e9', '#a855f7', '#f97316'];
 
 function unitLabel(value) {
   return UNIT_OPTIONS.find((u) => u.value === value)?.label || value;
+}
+
+// V2-4: distingue de dónde vino cada registro — 'purchase' (generado automáticamente al
+// marcar un item de Mi Lista como comprado) vs. 'manual' (capturado aquí con "+ Registrar
+// precio"). Puramente informativo, no cambia ningún cálculo.
+function sourceBadge(source) {
+  return source === 'purchase'
+    ? '<span class="badge badge--info">Compra</span>'
+    : '<span class="badge badge--neutral">Manual</span>';
 }
 
 export function renderPriceHistoryModule(container) {
@@ -80,7 +89,7 @@ export function renderPriceHistoryModule(container) {
         title: 'Sin precios registrados para este producto',
         message: 'Registra el primer precio con el botón de arriba.',
         actionLabel: '+ Registrar precio',
-        onAction: () => openPriceForm(),
+        onAction: () => openPriceForm({ defaultProductId: selectedProductId, onSaved: render }),
       }));
       return;
     }
@@ -148,7 +157,7 @@ export function renderPriceHistoryModule(container) {
     addBtn.type = 'button';
     addBtn.className = 'btn btn--primary';
     addBtn.textContent = '+ Registrar precio';
-    addBtn.addEventListener('click', () => openPriceForm());
+    addBtn.addEventListener('click', () => openPriceForm({ defaultProductId: selectedProductId, onSaved: render }));
 
     bar.appendChild(addBtn);
     return bar;
@@ -241,6 +250,7 @@ export function renderPriceHistoryModule(container) {
     card.appendChild(renderTable({
       columns: [
         { key: 'date', label: 'Fecha', render: (row) => formatDateShort(row.date) },
+        { key: 'source', label: 'Origen', render: (row) => sourceBadge(row.source) },
         { key: 'storeId', label: 'Tienda', render: (row) => escapeHtml(StoreRepository.getById(row.storeId)?.name || 'Tienda eliminada') },
         { key: 'quantity', label: 'Presentación', render: (row) => `${row.quantity} ${escapeHtml(unitLabel(row.unit))}` },
         { key: 'price', label: 'Precio', align: 'right', render: (row) => formatMoney(row.price) },
@@ -265,7 +275,7 @@ export function renderPriceHistoryModule(container) {
 
   function buildRowActions(row) {
     return createActionMenu('Más acciones para este precio', [
-      { label: 'Editar', onClick: () => openPriceForm(row) },
+      { label: 'Editar', onClick: () => openPriceForm({ existing: row, onSaved: render }) },
       {
         label: 'Eliminar',
         danger: true,
@@ -298,7 +308,7 @@ export function renderPriceHistoryModule(container) {
     header.className = 'responsive-card-list__header';
     const title = document.createElement('span');
     title.className = 'responsive-card-list__title';
-    title.textContent = formatDateShort(row.date);
+    title.innerHTML = `${escapeHtml(formatDateShort(row.date))} ${sourceBadge(row.source)}`;
     header.append(title, actions);
 
     const subtitle = document.createElement('div');
@@ -333,129 +343,6 @@ export function renderPriceHistoryModule(container) {
 
     card.append(header, subtitle, body);
     return card;
-  }
-
-  function openPriceForm(existing) {
-    const stores = StoreRepository.list({ includeInactive: false });
-    // Si se edita un registro cuya tienda fue desactivada después, debe seguir apareciendo
-    // como opción (si no, el <select> cae al primer valor y reasigna el precio a otra
-    // tienda al guardar, o el formulario ni siquiera se puede abrir si no quedan activas).
-    if (existing?.storeId && !stores.some((s) => s.id === existing.storeId)) {
-      const currentStore = StoreRepository.getById(existing.storeId);
-      if (currentStore) stores.push(currentStore);
-    }
-    if (!stores.length) {
-      showToast('Primero agrega una tienda desde Mandado > Tiendas.', { type: 'error' });
-      return;
-    }
-
-    // Contexto de solo lectura — el producto no es editable aquí, ya está fijado por el
-    // selector de la página (o por el registro existente); deja explícita la relación
-    // Producto + Presentación + Tienda + Precio + Fecha que pide el rediseño.
-    const contextProductId = existing?.productId || selectedProductId;
-    const contextProductName = ProductRepository.getById(contextProductId)?.name || 'Producto eliminado';
-
-    const formId = `price-form-${Date.now()}`;
-    const form = document.createElement('form');
-    form.id = formId;
-    form.className = 'form-grid';
-    form.innerHTML = `
-      <div class="flex items-center gap-sm">
-        <span class="text-muted">Producto</span>
-        <span class="card-title">${escapeHtml(contextProductName)}</span>
-      </div>
-      <div>
-        <label for="${formId}-store">Tienda</label>
-        <select id="${formId}-store" name="storeId">${stores.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')}</select>
-      </div>
-      <div class="form-row">
-        <div>
-          <label for="${formId}-quantity">Cantidad (presentación)</label>
-          <input type="number" id="${formId}-quantity" name="quantity" min="0" step="0.01" required value="${existing?.quantity ?? 1}">
-        </div>
-        <div>
-          <label for="${formId}-unit">Unidad</label>
-          <select id="${formId}-unit" name="unit">${UNIT_OPTIONS.map((u) => `<option value="${u.value}">${u.label}</option>`).join('')}</select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div>
-          <label for="${formId}-price">Precio</label>
-          <input type="number" id="${formId}-price" name="price" min="0" step="0.01" required value="${existing?.price ?? ''}">
-        </div>
-        <div>
-          <label for="${formId}-date">Fecha</label>
-          <input type="date" id="${formId}-date" name="date" required value="${existing?.date || toISODate(new Date())}">
-        </div>
-      </div>
-      <div>
-        <label for="${formId}-notes">Notas (opcional)</label>
-        <input type="text" id="${formId}-notes" name="notes" value="${escapeHtml(existing?.notes || '')}">
-      </div>
-      <p class="form-error hidden"></p>
-    `;
-
-    const storeSelect = form.querySelector(`#${formId}-store`);
-    if (existing?.storeId) storeSelect.value = existing.storeId;
-    const unitSelect = form.querySelector(`#${formId}-unit`);
-    unitSelect.value = existing?.unit || 'l';
-
-    const footer = document.createElement('div');
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'btn btn--ghost';
-    cancelBtn.textContent = 'Cancelar';
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'submit';
-    saveBtn.className = 'btn btn--primary';
-    saveBtn.setAttribute('form', formId);
-    saveBtn.textContent = existing ? 'Guardar cambios' : 'Registrar precio';
-    footer.append(cancelBtn, saveBtn);
-
-    const modal = openModal({ title: existing ? 'Editar precio' : 'Registrar precio', content: form, footer });
-    cancelBtn.addEventListener('click', () => modal.close());
-
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const data = new FormData(form);
-      const storeId = data.get('storeId');
-      const quantity = data.get('quantity');
-      const unit = data.get('unit');
-      const price = data.get('price');
-      const date = data.get('date');
-      const notes = data.get('notes');
-
-      const { valid, errors } = validate([
-        { valid: isRequired(storeId), message: 'Selecciona una tienda.' },
-        { valid: isPositiveNumber(quantity), message: 'La cantidad debe ser mayor a 0.' },
-        { valid: isPositiveNumber(price), message: 'El precio debe ser mayor a 0.' },
-        { valid: isValidDate(date), message: 'La fecha no es válida.' },
-      ]);
-      const errorEl = form.querySelector('.form-error');
-      if (!valid) {
-        errorEl.textContent = errors.join(' ');
-        errorEl.classList.remove('hidden');
-        return;
-      }
-      errorEl.classList.add('hidden');
-
-      if (existing) {
-        PriceRepository.update(existing.id, {
-          storeId,
-          quantity: Number(quantity),
-          unit,
-          price: Number(price),
-          date,
-          notes: (notes || '').trim(),
-        });
-      } else {
-        PriceRepository.create({ productId: selectedProductId, storeId, quantity, unit, price, date, notes });
-      }
-
-      modal.close();
-      showToast(existing ? 'Precio actualizado' : 'Precio registrado');
-      render();
-    });
   }
 
   render();

@@ -7,18 +7,56 @@ import State from '../core/state.js';
 import { parseFlexibleDate } from '../core/dates.js';
 import { itemsForList } from './groceryService.js';
 import { normalizePrice, getUnitDimension, getBaseQuantity } from './priceService.js';
+import StoreChainRepository from '../modules/stores/store-chain.repository.js';
 
+// V2-2: "tienda" pasa a ser StoreBranch (`storeBranches`, no la `stores` congelada desde la
+// migración — ver docs/v2-migration-plan.md). El id de una branch migrada es el MISMO id que
+// tenía su Store original, así que esto no cambia ningún resultado existente; además hace que
+// una sucursal nueva (creada después de esta fase, sin Store legacy) sí sea comparable, que es
+// justo lo que pide "asegurar que el comparador actual sigue resolviendo correctamente".
 function activeStores() {
-  return State.getCollection('stores').filter((s) => s.status === 'active');
+  return State.getCollection('storeBranches').filter((s) => s.status === 'active');
 }
 
-/** Precio más reciente registrado para un producto en una tienda, o null si no existe. */
+/** Precio más reciente registrado para un producto en una tienda (branch), o null si no
+ * existe. Compara contra `branchId` (siempre poblado, ver price.repository.js) en vez de
+ * `storeId` — mismo valor para cualquier precio migrado o capturado hoy, pero el campo
+ * correcto hacia adelante. */
 function latestPriceEntry(productId, storeId) {
-  const entries = State.getCollection('prices').filter((p) => p.productId === productId && p.storeId === storeId);
+  const entries = State.getCollection('prices').filter((p) => p.productId === productId && p.branchId === storeId);
   if (!entries.length) return null;
   return entries.reduce((latest, entry) => (
     !latest || parseFlexibleDate(entry.date) > parseFlexibleDate(latest.date) ? entry : latest
   ), null);
+}
+
+// V2-7 (Comparador V2, ver docs/v2-roadmap.md): agregación por StoreChain a partir de los
+// MISMOS `entries` ya calculados/ordenados por compareProductAcrossStores — no recalcula
+// nada, solo agrupa. "Mejor cadena" ≠ "mejor sucursal": una cadena puede tener varias
+// sucursales con precio; se representa por su sucursal más barata (branchCount indica cuántas
+// aportaron precio), que es información distinta de "la sucursal más barata en general" salvo
+// que ambas coincidan.
+function aggregateByChain(sortedEntries) {
+  const byChain = new Map();
+  sortedEntries.forEach((entry) => {
+    const chainId = entry.store.chainId;
+    if (!byChain.has(chainId)) byChain.set(chainId, []);
+    byChain.get(chainId).push(entry);
+  });
+
+  const chains = [...byChain.entries()].map(([chainId, chainEntries]) => {
+    // sortedEntries ya viene ordenado asc por pricePerBaseUnit, así que el primero de cada
+    // grupo ya es su mejor entrada — no se re-ordena.
+    const bestEntry = chainEntries[0];
+    return {
+      chainId,
+      chainName: StoreChainRepository.getById(chainId)?.name || 'Cadena eliminada',
+      branchCount: chainEntries.length,
+      bestEntry,
+    };
+  }).sort((a, b) => a.bestEntry.normalized.pricePerBaseUnit - b.bestEntry.normalized.pricePerBaseUnit);
+
+  return chains.map((c, i) => ({ ...c, isBestChain: i === 0 }));
 }
 
 /** NIVEL 1 — Compara el precio más reciente de un producto entre todas las tiendas activas
@@ -45,23 +83,29 @@ export function compareProductAcrossStores(productId) {
   return [...groups.entries()].map(([dimension, group]) => {
     const sorted = [...group].sort((a, b) => a.normalized.pricePerBaseUnit - b.normalized.pricePerBaseUnit);
     const best = sorted[0];
+    const resolvedEntries = sorted.map((entry) => ({
+      store: entry.store,
+      priceEntry: entry.priceEntry,
+      normalized: entry.normalized,
+      isBest: entry === best,
+      differenceVsBest: entry.normalized.pricePerBaseUnit - best.normalized.pricePerBaseUnit,
+    }));
     return {
       dimension,
       baseUnit: best.normalized.baseUnit,
-      entries: sorted.map((entry) => ({
-        store: entry.store,
-        priceEntry: entry.priceEntry,
-        normalized: entry.normalized,
-        isBest: entry === best,
-        differenceVsBest: entry.normalized.pricePerBaseUnit - best.normalized.pricePerBaseUnit,
-      })),
+      entries: resolvedEntries,
+      // V2-7: aditivo — comparison.module.js (u otro consumidor) puede seguir leyendo
+      // `entries` exactamente igual que antes; `chains` es información nueva, no un
+      // reemplazo.
+      chains: aggregateByChain(resolvedEntries),
     };
   });
 }
 
-/** Costo de UN item de una lista si se comprara en `storeId`, usando el precio más
- * reciente registrado ahí. null si no hay precio, o si la presentación registrada no es
- * de la misma dimensión que la unidad que necesita el item (no se puede inferir). */
+/** Costo de UN item de una lista si se comprara en la sucursal `storeId` (StoreBranch, ver
+ * V2-2), usando el precio más reciente registrado ahí. null si no hay precio, o si la
+ * presentación registrada no es de la misma dimensión que la unidad que necesita el item (no
+ * se puede inferir). */
 function costForItemAtStore(item, storeId) {
   const priceEntry = latestPriceEntry(item.productId, storeId);
   if (!priceEntry) return null;
