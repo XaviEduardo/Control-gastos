@@ -2,7 +2,7 @@
 // en Historial", sin captura duplicada. Único punto de código que decide cuándo una compra
 // genera una PriceObservation — cualquier pantalla que actualice `purchased`/`actualPrice`/
 // `selectedBranchId` de un GroceryListItem debe llamar a syncPurchaseObservation() después
-// (ver ejemplo real en js/modules/grocery/grocery-list.module.js#updateItemAndSync). No
+// (ver ejemplo real en js/modules/grocery/grocery-item-row.js#updateItemAndSync). No
 // duplica ni modifica ninguna fórmula de groceryService.js/priceService.js — solo reutiliza
 // itemRealSubtotal() ya existente para saber cuánto se pagó en total.
 

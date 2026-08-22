@@ -17,6 +17,7 @@ import { openModal } from '../../components/modal.js';
 import { openCategoryManager } from '../../components/category-manager.js';
 import { showToast } from '../../components/toast.js';
 import { normalizePrice, formatNormalizedPrice } from '../../services/priceService.js';
+import { navigateTo } from '../../core/router.js';
 import { parseFlexibleDate } from '../../core/dates.js';
 import { isRequired, validate, escapeHtml } from '../../core/validators.js';
 import { UNIT_OPTIONS } from './units.js';
@@ -235,6 +236,7 @@ export function renderGroceryProductsModule(container) {
     const menu = createActionMenu(`Más acciones para ${formatVariantLabel(variant)}`, [
       { label: 'Editar', onClick: () => openVariantForm(product, variant) },
       { label: 'Preferir sucursal...', onClick: () => openPreferredBranchForm(variant) },
+      { label: 'Ver historial de precios', onClick: () => navigateTo('/mandado/historial') },
       {
         label: variant.status === 'active' ? 'Desactivar' : 'Activar',
         onClick: () => {

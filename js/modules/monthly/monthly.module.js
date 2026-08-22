@@ -8,7 +8,7 @@ import { renderStatCard } from '../../components/stat-card.js';
 import { renderProgressCard } from '../../components/progress-card.js';
 import { renderMonthYearNav } from '../../components/month-year-nav.js';
 import { formatMoney, kpiDelta } from '../../core/currency.js';
-import { MONTH_NAMES, endOfMonth } from '../../core/dates.js';
+import { endOfMonth } from '../../core/dates.js';
 import {
   totalIncome, totalExpenses, expensesByCategory, previousPeriod, getPeriodRange, mandadoTotal,
 } from '../../services/financeService.js';

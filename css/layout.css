@@ -63,6 +63,18 @@
    color propio, sigue automáticamente al estado hover/activo del enlace que lo contiene. */
 .sidebar__icon { display: flex; }
 
+/* V2-8: tareas menos frecuentes dentro de un grupo (ej. Categorías/Tiendas/Historial en
+   Mandado) — más pequeñas y tenues que sus hermanas primarias, sin dejar de ser clicables
+   ni de estar en el sidebar (siguen a 1 interacción, solo priorizadas visualmente después). */
+.sidebar__link--secondary {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  padding: 8px var(--space-sm);
+}
+.sidebar__link--secondary .sidebar__icon svg { width: 16px; height: 16px; }
+.sidebar__link--secondary:hover { color: var(--color-primary); }
+.sidebar__link--secondary.sidebar__link--active { color: var(--color-sidebar-text-active); }
+
 .app-main {
   display: flex;
   flex-direction: column;

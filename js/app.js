@@ -4,9 +4,11 @@ import { on } from './core/events.js';
 import { registerRoute, initRouter } from './core/router.js';
 import { formatDateShort } from './core/dates.js';
 import { renderEmptyState } from './components/empty-state.js';
+import { iconMarkup } from './components/icons.js';
 import { buildSeed } from './data/seed.js';
 import { renderIncomeModule } from './modules/income/income.module.js';
 import { renderExpenseModule } from './modules/expenses/expense.module.js';
+import { renderMovementsModule } from './modules/movements/movements.module.js';
 import { renderWeeklyModule } from './modules/weekly/weekly.module.js';
 import { renderMonthlyModule } from './modules/monthly/monthly.module.js';
 import { renderDashboardModule } from './modules/dashboard/dashboard.module.js';
@@ -22,28 +24,49 @@ import { renderReportsModule } from './modules/reports/reports.module.js';
 import { renderSettingsModule } from './modules/settings/settings.module.js';
 import { setCurrency } from './core/currency.js';
 
+// Fuente única de verdad para título+icono de cada ruta (V2-8: antes existía también un
+// <nav> hardcodeado en index.html que se podía desincronizar de esto). El sidebar real se
+// genera abajo con buildSidebarNav() a partir de ROUTE_META + NAV_GROUPS.
 const ROUTE_META = {
-  '/dashboard': { title: 'Dashboard', icon: '📊' },
-  '/ingresos': { title: 'Ingresos', icon: '💵' },
-  '/gastos': { title: 'Gastos', icon: '🧾' },
-  '/semana': { title: 'Semana', icon: '📅' },
-  '/mes': { title: 'Mes', icon: '🗓️' },
-  '/presupuesto': { title: 'Presupuesto', icon: '🎯' },
-  '/mandado/lista': { title: 'Mi lista', icon: '🛒' },
-  '/mandado/productos': { title: 'Productos', icon: '🥕' },
-  '/mandado/categorias': { title: 'Categorías', icon: '🏷️' },
-  '/mandado/tiendas': { title: 'Tiendas', icon: '🏬' },
-  '/mandado/comparar': { title: 'Comparar precios', icon: '⚖️' },
-  '/mandado/historial': { title: 'Historial de precios', icon: '📈' },
-  '/calendario': { title: 'Calendario', icon: '📆' },
-  '/reportes': { title: 'Reportes', icon: '📑' },
-  '/configuracion': { title: 'Configuración', icon: '⚙️' },
+  '/dashboard': { title: 'Dashboard', icon: 'grid' },
+  '/movimientos': { title: 'Movimientos', icon: 'receipt' },
+  '/ingresos': { title: 'Ingresos', icon: 'trending-up' },
+  '/gastos': { title: 'Gastos', icon: 'trending-down' },
+  '/semana': { title: 'Semana', icon: 'calendar' },
+  '/mes': { title: 'Mes', icon: 'calendar' },
+  '/presupuesto': { title: 'Presupuesto', icon: 'target' },
+  '/mandado/lista': { title: 'Mi lista', icon: 'cart' },
+  '/mandado/productos': { title: 'Productos', icon: 'box' },
+  '/mandado/categorias': { title: 'Categorías', icon: 'tag' },
+  '/mandado/tiendas': { title: 'Tiendas', icon: 'store' },
+  '/mandado/comparar': { title: 'Comparar precios', icon: 'scale' },
+  '/mandado/historial': { title: 'Historial de precios', icon: 'history' },
+  '/calendario': { title: 'Calendario', icon: 'calendar' },
+  '/reportes': { title: 'Reportes', icon: 'bar-chart' },
+  '/configuracion': { title: 'Configuración', icon: 'settings' },
 };
+
+// Estructura del sidebar (V2-8 — simplificación de navegación). Ingresos/Gastos ya no son
+// entradas directas: Movimientos los reemplaza en el sidebar y sigue enlazando a ambos para
+// gestión avanzada (dueDay, método de pago) — ver movements.module.js#renderManageLinks.
+// En Mandado, `links` son las tareas frecuentes (priorizadas primero) y `secondaryLinks` las
+// menos frecuentes (Categorías/Tiendas/Historial), visualmente de-enfatizadas pero sin
+// eliminarse del sidebar — todo sigue accesible en 1 interacción.
+const NAV_GROUPS = [
+  { links: ['/dashboard'] },
+  { title: 'Finanzas', links: ['/movimientos', '/semana', '/mes', '/presupuesto'] },
+  {
+    title: 'Mandado',
+    links: ['/mandado/lista', '/mandado/productos', '/mandado/comparar'],
+    secondaryLinks: ['/mandado/categorias', '/mandado/tiendas', '/mandado/historial'],
+  },
+  { title: 'General', links: ['/calendario', '/reportes', '/configuracion'] },
+];
 
 function renderPlaceholder(meta) {
   return (container) => {
     container.appendChild(renderEmptyState({
-      icon: meta.icon,
+      icon: '📋',
       title: meta.title,
       message: meta.description,
     }));
@@ -52,6 +75,7 @@ function renderPlaceholder(meta) {
 
 function registerRoutes() {
   registerRoute('/dashboard', renderDashboardModule);
+  registerRoute('/movimientos', renderMovementsModule);
   registerRoute('/ingresos', renderIncomeModule);
   registerRoute('/gastos', renderExpenseModule);
   registerRoute('/semana', renderWeeklyModule);
@@ -68,13 +92,53 @@ function registerRoutes() {
   registerRoute('/configuracion', renderSettingsModule);
 
   const implemented = new Set([
-    '/dashboard', '/ingresos', '/gastos', '/semana', '/mes', '/calendario', '/presupuesto', '/reportes', '/configuracion',
+    '/dashboard', '/movimientos', '/ingresos', '/gastos', '/semana', '/mes', '/calendario', '/presupuesto', '/reportes', '/configuracion',
     '/mandado/lista', '/mandado/productos', '/mandado/categorias',
     '/mandado/tiendas', '/mandado/historial', '/mandado/comparar',
   ]);
   Object.entries(ROUTE_META).forEach(([path, meta]) => {
     if (implemented.has(path)) return;
     registerRoute(path, renderPlaceholder(meta));
+  });
+}
+
+function buildNavLink(path, { secondary = false } = {}) {
+  const meta = ROUTE_META[path];
+  if (!meta) return null;
+  const link = document.createElement('a');
+  link.className = `sidebar__link${secondary ? ' sidebar__link--secondary' : ''}`;
+  link.href = `#${path}`;
+  link.dataset.route = path;
+  const icon = document.createElement('span');
+  icon.className = 'sidebar__icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = iconMarkup(meta.icon, { size: 20 });
+  link.append(icon, ` ${meta.title}`);
+  return link;
+}
+
+// Genera el <nav> del sidebar a partir de NAV_GROUPS + ROUTE_META en vez de HTML hardcodeado
+// en index.html (V2-8 — elimina la segunda fuente de verdad que podía desincronizarse).
+function buildSidebarNav() {
+  const nav = document.querySelector('.sidebar__nav');
+  if (!nav) return;
+  nav.innerHTML = '';
+
+  NAV_GROUPS.forEach((group) => {
+    if (group.title) {
+      const title = document.createElement('p');
+      title.className = 'sidebar__group-title';
+      title.textContent = group.title;
+      nav.appendChild(title);
+    }
+    group.links.forEach((path) => {
+      const link = buildNavLink(path);
+      if (link) nav.appendChild(link);
+    });
+    (group.secondaryLinks || []).forEach((path) => {
+      const link = buildNavLink(path, { secondary: true });
+      if (link) nav.appendChild(link);
+    });
   });
 }
 
@@ -133,6 +197,7 @@ function bootstrap() {
   on('route:change', updatePageHeader);
   on('change', updateLastSavedLabel);
 
+  buildSidebarNav();
   registerRoutes();
   setupSidebarToggle();
   initRouter(document.getElementById('appContent'), '/dashboard');

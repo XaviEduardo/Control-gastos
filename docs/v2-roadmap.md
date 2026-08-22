@@ -447,7 +447,32 @@ regresión explícita, no solo un criterio de "funciona".
 
 ---
 
-## V2-8 — Simplificación de navegación
+## V2-8 — Simplificación de navegación — **hecho**
+
+**Implementado**: vista `Movimientos` (`js/modules/movements/movements.module.js`, nueva)
+combina Ingresos+Gastos con filtro Todos/Ingresos/Gastos, quick-add reusando
+`shared/movement-form.js#openMovementForm`, editar/eliminar por fila, y enlaces
+"Gestionar ingresos"/"Gestionar gastos" hacia las pantallas completas (dueDay, método de
+pago, categorías) — `IncomeRepository`/`ExpenseRepository` sin fusionarse, es solo una vista.
+`/ingresos` y `/gastos` siguen registradas y funcionales, solo se quitaron del sidebar
+directo. Se agregó "Ver historial de precios" en el menú ⋮ de cada variante en Productos
+(`products.module.js`) como el atajo contextual `Producto → Historial` sugerido.
+`ROUTE_META`/sidebar: se eliminó la segunda fuente de verdad — el `<nav>` de `index.html`
+ahora es un mount point vacío; `js/app.js#buildSidebarNav()` genera los links a partir de
+`ROUTE_META` (iconos ahora son nombres de `icons.js`, no emoji) + `NAV_GROUPS` (grupos +
+sub-lista `secondaryLinks` para Categorías/Tiendas/Historial, de-enfatizada visualmente con
+`.sidebar__link--secondary` sin salir del sidebar). Selector mes/año: `month-year-nav.js`
+reescrito a `[‹] Mes Año [›]` con detalle oculto por defecto tras el label (toca para
+expandir) — corrige el overflow en mobile; adoptado también por `monthly.module.js` (que
+tenía su propia implementación duplicada, ahora eliminada) además de sus consumidores
+previos (Calendario/Dashboard/Reportes). `weekly.module.js` migró sus botones prev/next a
+iconos (`chevron-left`/`chevron-right`, nuevos en `icons.js`), mismo patrón que Mi Lista.
+Reportes/Calendario ya usaban el componente compartido, se benefician automáticamente.
+**Validado**: 4 archivos con `node --check` limpio + script de aserciones en Node que
+confirma NAV_GROUPS↔ROUTE_META↔`implemented` consistentes (sin paths huérfanos ni
+duplicados, iconos existentes en `icons.js`, `/movimientos` presente) + auditoría UI vía
+agente independiente sobre orden de bootstrap, wiring de Movimientos y compatibilidad de
+consumidores de `renderMonthYearNav`.
 
 **Objetivo**: reducir carga cognitiva de 17 rutas planas sin perder acceso a nada.
 
@@ -470,7 +495,53 @@ clics/taps; no se elimina ninguna capacidad, solo se reubica.
 
 ---
 
-## V2-9 — Refactor focalizado
+## V2-9 — Refactor focalizado + estabilización V2 — **hecho**
+
+**Implementado**: extracción por movimiento puro de código (sin reescribir comportamiento) de
+los 3 módulos más grandes que ya habían recibido cambios en V2-0..V2-8:
+- `grocery-list.module.js` (969→419 líneas): extraídos `grocery-item-row.js` (fila de item +
+  formulario "cambiar tienda"), `grocery-item-groups.js` (agrupación por categoría/sucursal +
+  "productos habituales") y `grocery-branch-section.js` ("¿dónde estás comprando?"). El
+  principal conserva header/selector de lista/CRUD de lista/resumen de totales/enlace a Gastos.
+- `reports.module.js` (531→175 líneas): extraídos `reports-charts.js` (gráficas de
+  categoría/ingreso/tendencia) y `reports-grocery-insights.js` (top productos, evolución de
+  precios, tiendas más económicas, ahorro potencial). El principal conserva header/selector de
+  periodo/resumen.
+- `comparison.module.js` (403→33 líneas): extraídos `comparison-level-one.js` (producto
+  individual) y `comparison-level-two.js` (mandado completo); el principal queda como puro
+  orquestador.
+- `price-history.module.js` y `components.css` se revisaron y se dejaron intactos: ya estaban
+  cohesivos (secciones claramente delimitadas por comentarios) — dividirlos no aportaba
+  claridad real, solo más archivos.
+- Estado mutable compartido (`view`/`state` con `selectedProductId`, `groupMode`,
+  `branchPickerOpen`, etc.) se pasa por referencia a los archivos extraídos junto con un
+  callback `onChange` (reemplaza las llamadas directas a `render()` del closure original) —
+  mismo patrón en los 3 módulos, cero cambio de comportamiento observable.
+
+**QA de datos/lógica (Node, 83 aserciones, 0 fallidas)**: import de un backup v1 sintético
+(2 incomes, 3 expenses, 2 products→2 variants 1:1, 1 store→1 chain/1 branch con el MISMO id,
+5 prices, 1 lista, 3 items, 1 budget) migrado a v6 vía `StorageService.importData()` —
+recuentos idénticos confirmados en las 10 colecciones pedidas, más los campos aditivos nuevos
+(`branchId`, `source:'manual'`, `productVariantId`, `selectedBranchId`, `activeBranchId`,
+`preferredBranchId`) correctamente poblados sin perder ningún dato legacy. WEIGHT (Tomate
+2.5kg×$28/kg=$70) y UNIT (Leche 2pza×$32/pza=$64, con presentación 1.5L puramente informativa)
+confirmados sobre `itemEffectiveSubtotal`. BRANCHES: mismo `ProductVariant` con precios en
+Smart A ($32) y Smart B ($34) — ambos registros coexisten, el comparador los agrupa en 1 sola
+cadena con `branchCount:2` y la sucursal más barata correcta. HISTORIAL: una compra genera
+`source:'purchase'`; editar el precio real actualiza la MISMA observación (mismo id, nunca una
+segunda fila); una captura manual desde el formulario usa `source:'manual'`. REPETIR LISTA:
+`duplicate()` genera una lista con id propio, items con ids propios, sin heredar
+comprado/precio real/sucursal fijada/gasto vinculado, y mutar la copia no afecta a la original.
+COMPARADOR: dos precios del mismo producto en dimensiones incompatibles (paquete vs. pza) caen
+en grupos separados, nunca mezclados; una tienda sin precio compatible se excluye de ese item
+sin inventar un costo; un producto sin ningún precio queda en `unavailableItems`.
+
+**QA de UI/responsive/consola**: `node --check` limpio en los 68 archivos de `js/`; auditoría
+de un agente independiente sobre wiring cruzado entre cada módulo principal y sus archivos
+extraídos (parámetros `onChange`/`view`/`state` consistentes de punta a punta, ningún import
+roto, ningún nombre de función movida referenciado desde fuera de su nuevo archivo), riesgo de
+overflow en 320-428px en las pantallas señaladas, y consistencia visual (sin mezcla de iconos
+emoji donde el resto de la app ya usa SVG).
 
 **Objetivo**: reducir el tamaño/responsabilidades de los módulos más grandes, sin reescritura
 completa.
