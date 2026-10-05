@@ -10,6 +10,8 @@ import ExpenseRepository from '../expenses/expense.repository.js';
 import { toISODate } from '../../core/dates.js';
 import { isRequired, isPositiveNumber, isValidDate, validate, escapeHtml } from '../../core/validators.js';
 import { FREQUENCY_OPTIONS } from '../../services/recurrenceService.js';
+import MovementTemplateRepository from './movement-template.repository.js';
+import { templateToMovementPayload } from '../../services/movementTemplateService.js';
 
 const incomeTypeRepo = createCategoryRepository('incomeTypes');
 const expenseCategoryRepo = createCategoryRepository('expenseCategories');
@@ -31,6 +33,14 @@ export function openMovementForm({ type, existing, defaultDate, onSaved }) {
   form.id = formId;
   form.className = 'form-grid';
   form.innerHTML = `
+    ${existing ? '' : `
+    <div data-template-picker>
+      <label for="${formId}-template">Usar plantilla (opcional)</label>
+      <select id="${formId}-template" name="templateId">
+        <option value="">Captura manual</option>
+      </select>
+    </div>
+    `}
     <div>
       <label for="${formId}-description">Concepto</label>
       <input type="text" id="${formId}-description" name="description" required value="${escapeHtml(existing?.description || '')}">
@@ -79,6 +89,31 @@ export function openMovementForm({ type, existing, defaultDate, onSaved }) {
     customRuleField.classList.toggle('hidden', freqSelect.value !== 'custom');
   });
 
+  let appliedTemplatePayload = null;
+  if (!existing) {
+    const templateSelect = form.querySelector(`#${formId}-template`);
+    const templates = MovementTemplateRepository.list({ type });
+    if (templates.length) {
+      templateSelect.innerHTML += templates.map((template) => `<option value="${template.id}">${escapeHtml(template.name)}</option>`).join('');
+      templateSelect.addEventListener('change', () => {
+        const template = MovementTemplateRepository.getById(templateSelect.value);
+        appliedTemplatePayload = template ? templateToMovementPayload(template, {
+          currentAmount: form.querySelector(`#${formId}-amount`).value,
+        }) : null;
+        if (!appliedTemplatePayload) return;
+        form.querySelector(`#${formId}-description`).value = appliedTemplatePayload.description || '';
+        form.querySelector(`#${formId}-amount`).value = appliedTemplatePayload.amount ?? '';
+        form.querySelector(`#${formId}-date`).value = appliedTemplatePayload.date;
+        categorySelect.value = isIncome ? appliedTemplatePayload.incomeTypeId : appliedTemplatePayload.categoryId;
+        freqSelect.value = appliedTemplatePayload.frequency || 'once';
+        form.querySelector(`#${formId}-interval`).value = appliedTemplatePayload.intervalDays || 30;
+        customRuleField.classList.toggle('hidden', freqSelect.value !== 'custom');
+      });
+    } else {
+      form.querySelector('[data-template-picker]')?.classList.add('hidden');
+    }
+  }
+
   const footer = document.createElement('div');
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
@@ -109,7 +144,7 @@ export function openMovementForm({ type, existing, defaultDate, onSaved }) {
       date: data.get('date'),
       frequency: data.get('frequency'),
       intervalDays: data.get('intervalDays'),
-      notes: existing?.notes || '',
+      notes: appliedTemplatePayload?.notes ?? existing?.notes ?? '',
     };
 
     if (isIncome) {
@@ -118,8 +153,8 @@ export function openMovementForm({ type, existing, defaultDate, onSaved }) {
       payload.categoryId = categoryId;
       // Este formulario simplificado no edita dueDay/paymentMethod: se preservan los
       // valores existentes para no perder información al editar desde el calendario.
-      payload.dueDay = existing?.dueDay ?? '';
-      payload.paymentMethod = existing?.paymentMethod ?? '';
+      payload.dueDay = appliedTemplatePayload?.dueDay ?? existing?.dueDay ?? '';
+      payload.paymentMethod = appliedTemplatePayload?.paymentMethod ?? existing?.paymentMethod ?? '';
     }
 
     const { valid, errors } = validate([

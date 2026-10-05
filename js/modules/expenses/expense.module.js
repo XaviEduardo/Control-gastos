@@ -14,6 +14,8 @@ import { formatDateShort, toISODate, parseFlexibleDate } from '../../core/dates.
 import { isRequired, isPositiveNumber, isValidDate, validate, escapeHtml } from '../../core/validators.js';
 import { FREQUENCY_OPTIONS, frequencyLabel } from '../../services/recurrenceService.js';
 import { totalExpenses, expensesByCategory, previousPeriod } from '../../services/financeService.js';
+import MovementTemplateRepository from '../shared/movement-template.repository.js';
+import { templateToMovementPayload } from '../../services/movementTemplateService.js';
 
 const categoryRepo = createCategoryRepository('expenseCategories');
 
@@ -238,6 +240,14 @@ export function renderExpenseModule(container) {
     form.id = formId;
     form.className = 'form-grid';
     form.innerHTML = `
+      ${existing ? '' : `
+      <div data-template-picker>
+        <label for="${formId}-template">Usar plantilla (opcional)</label>
+        <select id="${formId}-template" name="templateId">
+          <option value="">Captura manual</option>
+        </select>
+      </div>
+      `}
       <div>
         <label for="${formId}-description">Concepto</label>
         <input type="text" id="${formId}-description" name="description" required value="${escapeHtml(existing?.description || '')}">
@@ -297,6 +307,33 @@ export function renderExpenseModule(container) {
     freqSelect.addEventListener('change', () => {
       customRuleField.classList.toggle('hidden', freqSelect.value !== 'custom');
     });
+
+    if (!existing) {
+      const templateSelect = form.querySelector(`#${formId}-template`);
+      const templates = MovementTemplateRepository.list({ type: 'expense' });
+      if (templates.length) {
+        templateSelect.innerHTML += templates.map((template) => `<option value="${template.id}">${escapeHtml(template.name)}</option>`).join('');
+        templateSelect.addEventListener('change', () => {
+          const template = MovementTemplateRepository.getById(templateSelect.value);
+          if (!template) return;
+          const payload = templateToMovementPayload(template, {
+            currentAmount: form.querySelector(`#${formId}-amount`).value,
+          });
+          form.querySelector(`#${formId}-description`).value = payload.description || '';
+          form.querySelector(`#${formId}-amount`).value = payload.amount ?? '';
+          form.querySelector(`#${formId}-date`).value = payload.date;
+          categorySelect.value = payload.categoryId || categorySelect.value;
+          freqSelect.value = payload.frequency || 'once';
+          form.querySelector(`#${formId}-interval`).value = payload.intervalDays || 30;
+          form.querySelector(`#${formId}-dueDay`).value = payload.dueDay || '';
+          form.querySelector(`#${formId}-paymentMethod`).value = payload.paymentMethod || '';
+          form.querySelector(`#${formId}-notes`).value = payload.notes || '';
+          customRuleField.classList.toggle('hidden', freqSelect.value !== 'custom');
+        });
+      } else {
+        form.querySelector('[data-template-picker]')?.classList.add('hidden');
+      }
+    }
 
     const footer = document.createElement('div');
     const cancelBtn = document.createElement('button');

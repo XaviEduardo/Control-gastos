@@ -10,6 +10,7 @@ const CURRENT_VERSION = 6;
 const COLLECTION_KEYS = [
   'incomes', 'incomeTypes',
   'expenses', 'expenseCategories',
+  'movementTemplates',
   'groceryCategories', 'groceryProducts', 'productVariants',
   'stores', 'storeChains', 'storeBranches', 'prices',
   'groceryLists', 'groceryListItems',

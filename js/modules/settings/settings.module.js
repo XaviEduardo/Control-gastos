@@ -13,6 +13,7 @@ import { showToast } from '../../components/toast.js';
 import { iconMarkup } from '../../components/icons.js';
 import { formatDateTime, toISODate } from '../../core/dates.js';
 import { escapeHtml } from '../../core/validators.js';
+import { renderMovementTemplatesSection } from './movement-templates-section.js';
 
 const CURRENCY_OPTIONS = [
   { value: 'MXN', label: 'MXN — Peso mexicano' },
@@ -24,6 +25,7 @@ const COLLECTION_LABELS = {
   incomes: 'Ingresos',
   incomeTypes: 'Tipos de ingreso',
   expenses: 'Gastos',
+  movementTemplates: 'Plantillas de movimientos',
   expenseCategories: 'Categorías de gasto',
   groceryCategories: 'Categorías de mandado',
   groceryProducts: 'Productos',
@@ -44,6 +46,7 @@ export function renderSettingsModule(container) {
     root.append(
       renderHeader(),
       renderPreferencesSection(),
+      renderMovementTemplatesSection({ onChange: render }),
       renderDataSection(),
       renderBackupSection(),
       renderResetSection(),
