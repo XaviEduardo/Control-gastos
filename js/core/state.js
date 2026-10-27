@@ -6,8 +6,8 @@ import { emit } from './events.js';
 
 let state = null;
 
-function init(seedFactory) {
-  state = StorageService.init(seedFactory);
+async function init(seedFactory) {
+  state = await StorageService.init(seedFactory);
   return state;
 }
 

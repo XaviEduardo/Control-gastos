@@ -8,6 +8,7 @@
 import State from '../../core/state.js';
 import StorageService from '../../core/storage.js';
 import { setCurrency } from '../../core/currency.js';
+import { signOut } from '../../core/auth.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
 import { iconMarkup } from '../../components/icons.js';
@@ -50,6 +51,7 @@ export function renderSettingsModule(container) {
       renderDataSection(),
       renderBackupSection(),
       renderResetSection(),
+      renderAccountSection(),
     );
   }
 
@@ -305,6 +307,21 @@ export function renderSettingsModule(container) {
       },
     });
     return renderSection('Restablecer', [row]);
+  }
+
+  // ---------- Cuenta ----------
+
+  function renderAccountSection() {
+    const row = settingsActionRow({
+      icon: 'arrow-up-right',
+      title: 'Cerrar sesión',
+      subtitle: 'Tus datos quedan guardados en la nube para la próxima vez',
+      onAction: async () => {
+        await signOut();
+        window.location.reload();
+      },
+    });
+    return renderSection('Cuenta', [row]);
   }
 
   render();

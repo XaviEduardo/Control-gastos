@@ -3,8 +3,12 @@
 ## Propósito
 Reemplazar `Control_de_Gastos.xlsx` con una app web local para ingresos, gastos, presupuesto, vista semanal/mensual, mandado/canasta básica, tiendas, precios/comparador y reportes.
 
-## Stack (v1)
-HTML5 + CSS3 + JS Vanilla ES6 (módulos nativos). Sin build, sin frameworks, sin backend. Chart.js por CDN. Persistencia: `localStorage` detrás de `StorageService` (ver `docs/architecture.md`). Se abre con `index.html` o Live Server.
+## Stack (v1, actualizado — Fase 1 Supabase)
+HTML5 + CSS3 + JS Vanilla ES6 (módulos nativos). Sin build, sin frameworks. Chart.js y
+`@supabase/supabase-js` por CDN. Persistencia: Supabase (Postgres + Auth) detrás de
+`StorageService`, con `localStorage` como caché offline — ver `docs/decisions.md` (Fecha:
+2026-10-27). Requiere servidor local para abrir (módulos ES no funcionan con `file://`): Live
+Server o `python -m http.server`.
 
 ## Reglas fundamentales
 - Toda persistencia pasa por `js/core/storage.js` (`StorageService`). Nunca `localStorage` directo desde módulos.

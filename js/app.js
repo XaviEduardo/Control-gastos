@@ -23,6 +23,8 @@ import { renderBudgetModule } from './modules/budget/budget.module.js';
 import { renderReportsModule } from './modules/reports/reports.module.js';
 import { renderSettingsModule } from './modules/settings/settings.module.js';
 import { setCurrency } from './core/currency.js';
+import { waitForSession } from './core/auth-gate.js';
+import { showToast } from './components/toast.js';
 
 // Fuente única de verdad para título+icono de cada ruta (V2-8: antes existía también un
 // <nav> hardcodeado en index.html que se podía desincronizar de esto). El sidebar real se
@@ -190,12 +192,26 @@ function setupSidebarToggle() {
   });
 }
 
-function bootstrap() {
-  State.init(buildSeed);
+async function bootstrap() {
+  // Fase 1 Supabase (ver docs/decisions.md): no se monta nada de la app hasta que exista una
+  // sesión — waitForSession() muestra el login (#authScreen) y resuelve apenas el usuario
+  // entra o crea cuenta, revelando #appShell recién en ese momento.
+  const session = await waitForSession(
+    document.getElementById('authScreen'),
+    document.getElementById('appShell'),
+  );
+  StorageService.setUserId(session.user.id);
+
+  await State.init(buildSeed);
   setCurrency(State.getSettings().currency || 'MXN');
 
   on('route:change', updatePageHeader);
   on('change', updateLastSavedLabel);
+  // No bloquea nada (ver storage.js#writeRaw): solo avisa si una escritura no llegó a la nube,
+  // para que el usuario sepa que ese cambio por ahora solo vive en este dispositivo.
+  on('sync:error', () => {
+    showToast('Sin conexión con la nube: tus cambios se guardaron solo en este dispositivo.', { type: 'error' });
+  });
 
   buildSidebarNav();
   registerRoutes();

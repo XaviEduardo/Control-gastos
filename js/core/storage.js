@@ -1,11 +1,21 @@
 // Única abstracción de persistencia. Ningún otro módulo debe llamar a localStorage directamente
 // (ver docs/decisions.md). Sustituir esta implementación permite migrar a IndexedDB/API sin
 // tocar el resto de la aplicación.
+//
+// Fase 1 Supabase (ver docs/decisions.md): la nube es la fuente de verdad; localStorage se
+// conserva como caché de solo-lectura para seguir funcionando sin conexión (ej. dentro del
+// súper). Las escrituras actualizan la caché local de forma síncrona (mismo comportamiento de
+// siempre) y disparan una sincronización a Supabase en segundo plano; si esa sincronización
+// falla (sin conexión), se emite 'sync:error' por core/events.js en vez de lanzar una excepción
+// — la UI nunca se bloquea esperando a la red, igual que antes nunca esperaba a disco.
 
 import { generateId } from './id.js';
+import { emit } from './events.js';
+import { supabase } from './supabaseClient.js';
 
 const STORAGE_KEY = 'control-gastos:data';
 const CURRENT_VERSION = 6;
+let currentUserId = null;
 
 const COLLECTION_KEYS = [
   'incomes', 'incomeTypes',
@@ -33,24 +43,55 @@ function emptyDocument() {
   return doc;
 }
 
-function readRaw() {
+function readLocalCache() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch (error) {
-    console.error('StorageService: no se pudo leer el almacenamiento', error);
+    console.error('StorageService: no se pudo leer la caché local', error);
     return null;
   }
 }
 
-function writeRaw(document) {
+function writeLocalCache(document) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
     return true;
   } catch (error) {
-    console.error('StorageService: no se pudo guardar el almacenamiento', error);
+    console.error('StorageService: no se pudo escribir la caché local', error);
     return false;
   }
+}
+
+async function readRemote() {
+  if (!currentUserId) return null;
+  const { data, error } = await supabase
+    .from('app_data')
+    .select('doc')
+    .eq('user_id', currentUserId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? data.doc : null;
+}
+
+async function writeRemote(document) {
+  if (!currentUserId) return;
+  const { error } = await supabase
+    .from('app_data')
+    .upsert({ user_id: currentUserId, doc: document, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
+// Firma síncrona preservada (todos los llamadores existentes —State.setCollection/setSettings,
+// init(), clear()— no esperan una promesa): la caché local se escribe de inmediato, la nube se
+// sincroniza en segundo plano.
+function writeRaw(document) {
+  const ok = writeLocalCache(document);
+  writeRemote(document).catch((error) => {
+    console.error('StorageService: no se pudo sincronizar con Supabase', error);
+    emit('sync:error', error);
+  });
+  return ok;
 }
 
 // Cadena de migraciones de esquema (infraestructura de V2-0, ver docs/v2-roadmap.md).
@@ -227,17 +268,39 @@ function isValidBackupShape(json) {
 let doc = null;
 
 const StorageService = {
-  /** Carga el documento guardado. Devuelve null si no existe todavía. Si `migrate()` de verdad
-   * transformó el documento (versión distinta a la guardada), el resultado se persiste de
-   * inmediato — si no, cada carga posterior sin ninguna mutación del usuario volvería a migrar
-   * desde el mismo raw viejo, generando ids nuevos (`generateId()`) cada vez en vez de una sola
-   * migración estable. */
-  load() {
-    const raw = readRaw();
+  /** Fase 1 Supabase: debe llamarse (app.js, tras un login exitoso) antes de load()/init() —
+   * fija de qué usuario leer/escribir en la tabla `app_data`. Sin esto, load()/init() solo
+   * pueden recurrir a la caché local (comportamiento equivalente a estar sin sesión/sin red). */
+  setUserId(userId) {
+    currentUserId = userId || null;
+  },
+
+  /** Carga el documento. La nube es la fuente de verdad: si hay sesión y responde, se usa ese
+   * documento (y se refresca la caché local). Si no hay sesión o falla la red, se recurre a la
+   * caché local para que la app siga siendo utilizable sin conexión. Devuelve null si no existe
+   * ningún dato en ningún lado todavía. Si `migrate()` transformó el documento, el resultado se
+   * persiste de inmediato (mismo motivo que antes: evita re-migrar y generar ids nuevos en cada
+   * carga sin mutaciones del usuario). */
+  async load() {
+    let raw = null;
+    let fromRemote = false;
+    if (currentUserId) {
+      try {
+        raw = await readRemote();
+        fromRemote = raw !== null;
+      } catch (error) {
+        console.error('StorageService: no se pudo leer Supabase, se usa la caché local', error);
+        emit('sync:error', error);
+      }
+    }
+    if (!raw) raw = readLocalCache();
     if (!raw) { doc = null; return null; }
+
     const migrated = migrate(raw);
-    if (migrated.version !== raw.version) writeRaw(migrated);
     doc = migrated;
+    if (migrated.version !== raw.version) writeRaw(migrated);
+    else if (!fromRemote) writeRemote(migrated).catch((error) => emit('sync:error', error));
+    else writeLocalCache(migrated);
     return doc;
   },
 
@@ -246,8 +309,8 @@ const StorageService = {
    * `migrate()` (en vez de forzar `CURRENT_VERSION` directamente) evita mantener el seed
    * actualizado a mano en cada fase que cambie el esquema; una instalación nueva queda
    * exactamente igual de al día que una migrada. */
-  init(seedFactory) {
-    const loaded = this.load();
+  async init(seedFactory) {
+    const loaded = await this.load();
     if (loaded) return loaded;
     const seeded = { ...emptyDocument(), ...seedFactory(), version: 1 };
     doc = { ...migrate(seeded), lastUpdated: new Date().toISOString() };
@@ -255,8 +318,11 @@ const StorageService = {
     return doc;
   },
 
+  // `load()`/`init()` ahora son async y siempre se esperan (await) en el bootstrap antes de
+  // montar cualquier módulo — para cuando get()/getSettings() se llaman, `doc` ya está
+  // poblado. Ya no se dispara una recarga perdida aquí (antes era sync; con Supabase sería
+  // una promesa que nadie espera, dejando `doc` en null para esta llamada igual).
   get(collection) {
-    if (!doc) this.load();
     return doc ? doc[collection] : undefined;
   },
 
@@ -268,7 +334,6 @@ const StorageService = {
   },
 
   getSettings() {
-    if (!doc) this.load();
     return doc ? doc.settings : emptyDocument().settings;
   },
 
@@ -292,6 +357,9 @@ const StorageService = {
   clear() {
     doc = emptyDocument();
     localStorage.removeItem(STORAGE_KEY);
+    // Sincroniza el documento vacío a la nube también (si no, "Restablecer datos" solo
+    // limpiaría este dispositivo y el próximo load() volvería a traer los datos viejos).
+    writeRemote(doc).catch((error) => emit('sync:error', error));
     return true;
   },
 
