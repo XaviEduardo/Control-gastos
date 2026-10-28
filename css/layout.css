@@ -16,10 +16,69 @@
   background: var(--color-surface-secondary);
 }
 
-.auth-screen__card {
+.auth-screen__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
   max-width: 360px;
 }
+
+.auth-screen__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+  font-weight: 700;
+  font-size: var(--font-size-lg);
+  color: var(--color-text);
+}
+.auth-screen__brand .icon { color: var(--color-primary); }
+
+.auth-screen__card {
+  width: 100%;
+}
+
+.auth-screen__links { margin: var(--space-sm) 0 0; }
+.auth-screen__links a,
+.auth-screen__card a {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+}
+.auth-screen__links a:hover,
+.auth-screen__card a:hover { text-decoration: underline; }
+
+/* Campo con icono a la izquierda (y, en contraseña, un botón mostrar/ocultar a la derecha) —
+   patrón nuevo solo para esta pantalla; el resto de la app usa inputs simples sin icono. */
+.input-group { position: relative; }
+.input-group__input { padding-left: 38px; }
+.input-group--password .input-group__input { padding-right: 38px; }
+.input-group__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+.input-group__toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.input-group__toggle:hover { background: var(--color-bg); color: var(--color-text); }
 
 .sidebar {
   background: var(--color-sidebar-bg);
@@ -158,3 +217,27 @@
   background: rgba(15, 23, 42, 0.4);
   z-index: 25;
 }
+
+/* Captura rápida (FAB) — fijo en toda la app, mismo nivel que .sidebar-toggle (ambos son
+   controles globales fuera de #appShell) para que el modal (.modal-overlay, z-index 50) y el
+   toast (.toast-container, z-index 60) sigan apareciendo por encima sin conflicto. */
+.fab-add {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 40;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.fab-add:hover { background: var(--color-primary-hover); }
+.fab-add .icon { color: #fff; }

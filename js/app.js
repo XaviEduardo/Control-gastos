@@ -25,6 +25,8 @@ import { renderSettingsModule } from './modules/settings/settings.module.js';
 import { setCurrency } from './core/currency.js';
 import { waitForSession } from './core/auth-gate.js';
 import { showToast } from './components/toast.js';
+import { applyTheme } from './core/theme.js';
+import { openMovementForm } from './modules/shared/movement-form.js';
 
 // Fuente única de verdad para título+icono de cada ruta (V2-8: antes existía también un
 // <nav> hardcodeado en index.html que se podía desincronizar de esto). El sidebar real se
@@ -192,6 +194,21 @@ function setupSidebarToggle() {
   });
 }
 
+// Captura rápida (ver docs/decisions.md): botón fijo fuera de #appShell (ver index.html),
+// visible en cualquier ruta una vez hay sesión. Reutiliza el mismo formulario ligero que ya
+// usan Calendario/Movimientos (openMovementForm) — no hay una versión "del FAB" aparte que
+// mantener. onSaved no necesita refrescar nada: el propio formulario ya muestra su toast de
+// éxito, y la ruta activa (si lista gastos) se actualiza sola la próxima vez que se re-renderice.
+function setupQuickAdd() {
+  const fab = document.getElementById('fabAddExpense');
+  if (!fab) return;
+  fab.innerHTML = iconMarkup('plus', { size: 24 });
+  fab.classList.remove('hidden');
+  fab.addEventListener('click', () => {
+    openMovementForm({ type: 'expense', onSaved: () => {} });
+  });
+}
+
 async function bootstrap() {
   // Fase 1 Supabase (ver docs/decisions.md): no se monta nada de la app hasta que exista una
   // sesión — waitForSession() muestra el login (#authScreen) y resuelve apenas el usuario
@@ -204,6 +221,7 @@ async function bootstrap() {
 
   await State.init(buildSeed);
   setCurrency(State.getSettings().currency || 'MXN');
+  applyTheme();
 
   on('route:change', updatePageHeader);
   on('change', updateLastSavedLabel);
@@ -216,6 +234,7 @@ async function bootstrap() {
   buildSidebarNav();
   registerRoutes();
   setupSidebarToggle();
+  setupQuickAdd();
   initRouter(document.getElementById('appContent'), '/dashboard');
 
   updateLastSavedLabel();

@@ -13,9 +13,10 @@ import { openMovementForm } from '../shared/movement-form.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import IncomeRepository from '../income/income.repository.js';
 import ExpenseRepository from '../expenses/expense.repository.js';
+import ExpensePaymentRepository from '../expenses/expense-payment.repository.js';
 import { formatMoney } from '../../core/currency.js';
 import {
-  MONTH_NAMES, startOfMonth, endOfMonth, startOfWeek, endOfWeek, toISODate, formatDateLong,
+  MONTH_NAMES, startOfMonth, endOfMonth, startOfWeek, endOfWeek, toISODate, formatDateShort, formatDateLong,
 } from '../../core/dates.js';
 import { getOccurrencesInRange, frequencyLabel } from '../../services/recurrenceService.js';
 import { escapeHtml } from '../../core/validators.js';
@@ -218,9 +219,34 @@ export function renderCalendarModule(container) {
       const categoryId = isIncome ? item.incomeTypeId : item.categoryId;
       const categoryName = categoryRepo.list().find((c) => c.id === categoryId)?.name || 'Sin categoría';
       const recurrent = item.frequency !== 'once';
+      // "Marcar como pagado" aplica solo a gastos, y a ESTA ocurrencia (selectedDate), nunca al
+      // Expense completo — así una recurrencia puede tener unos meses pagados y otros no, sin
+      // generar ningún registro duplicado (ver expense-payment.repository.js).
+      const payment = !isIncome ? ExpensePaymentRepository.find(item.id, selectedDate) : null;
+      const isPaid = !!payment;
 
       const row = document.createElement('div');
-      row.className = 'movement-row';
+      row.className = `movement-row${isPaid ? ' movement-row--paid' : ''}`;
+
+      if (!isIncome) {
+        const checkboxWrap = document.createElement('label');
+        checkboxWrap.className = 'movement-row__checkbox-wrap';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = isPaid;
+        checkbox.setAttribute('aria-label', `Marcar "${item.description}" como pagado`);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            ExpensePaymentRepository.markPaid(item.id, selectedDate, toISODate(new Date()));
+            showToast('Gasto marcado como pagado');
+          } else {
+            ExpensePaymentRepository.markUnpaid(item.id, selectedDate);
+          }
+          render();
+        });
+        checkboxWrap.appendChild(checkbox);
+        row.appendChild(checkboxWrap);
+      }
 
       const icon = document.createElement('span');
       icon.className = `movement-row__icon${isIncome ? ' movement-row__icon--income' : ' movement-row__icon--expense'}`;
@@ -230,7 +256,7 @@ export function renderCalendarModule(container) {
       body.className = 'movement-row__body';
       body.innerHTML = `
         <div class="movement-row__title">${escapeHtml(item.description)}</div>
-        <div class="movement-row__subtitle">${escapeHtml(categoryName)}${recurrent ? ` · ${escapeHtml(frequencyLabel(item.frequency))}` : ''}</div>
+        <div class="movement-row__subtitle">${escapeHtml(categoryName)}${recurrent ? ` · ${escapeHtml(frequencyLabel(item.frequency))}` : ''}${isPaid ? ` · Pagado el ${escapeHtml(formatDateShort(payment.paidDate))}` : ''}</div>
       `;
 
       const amount = document.createElement('span');

@@ -1,5 +1,6 @@
 import State from '../../core/state.js';
 import { generateId } from '../../core/id.js';
+import ExpensePaymentRepository from './expense-payment.repository.js';
 
 const COLLECTION = 'expenses';
 
@@ -43,6 +44,10 @@ function update(id, data) {
 
 function remove(id) {
   State.setCollection(COLLECTION, list().filter((item) => item.id !== id));
+  // Evita registros de pago huérfanos (ver expense-payment.repository.js) — centralizado aquí
+  // en vez de en cada pantalla que elimina un gasto (Calendario/Gastos/Movimientos), para que
+  // ningún llamador futuro pueda olvidarlo.
+  ExpensePaymentRepository.removeByExpenseId(id);
 }
 
 function duplicate(id) {

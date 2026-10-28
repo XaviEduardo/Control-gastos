@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Control de Gastos</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4F46E5">
 <link rel="stylesheet" href="css/variables.css">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/layout.css">
@@ -16,6 +18,11 @@
     <span></span><span></span><span></span>
   </button>
   <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Captura rápida (ver docs/decisions.md): visible en toda la app una vez hay sesión,
+       fuera de #appShell para no depender de qué ruta esté montada. Oculto hasta que
+       bootstrap() en js/app.js lo active (nunca debe verse en la pantalla de login). -->
+  <button type="button" class="fab-add hidden" id="fabAddExpense" aria-label="Agregar gasto"></button>
 
   <div class="auth-screen hidden" id="authScreen"></div>
 
@@ -43,5 +50,16 @@
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script type="module" src="js/app.js"></script>
+  <script>
+    // PWA básica (ver sw.js): registro best-effort, nunca bloquea la carga de la app si falla
+    // (ej. restricciones de un servidor de pruebas local).
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((error) => {
+          console.error('No se pudo registrar el service worker', error);
+        });
+      });
+    }
+  </script>
 </body>
 </html>

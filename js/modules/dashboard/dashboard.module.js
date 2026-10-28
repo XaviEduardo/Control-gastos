@@ -12,6 +12,8 @@ import { iconMarkup } from '../../components/icons.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import { formatMoney, kpiDelta } from '../../core/currency.js';
 import { renderProgressCard } from '../../components/progress-card.js';
+import { renderReminderBanner } from '../../components/reminder-banner.js';
+import { DEFAULT_REMINDERS_DAYS_AHEAD } from '../../services/remindersService.js';
 import {
   MONTH_NAMES, startOfMonth, endOfMonth, startOfWeek, toISODate, formatDateShort,
 } from '../../core/dates.js';
@@ -313,6 +315,13 @@ export function renderDashboardModule(container) {
     const prevExpense = totalExpenses(prev);
     const weeklyExpense = totalExpenses({ type: 'week', date: new Date() });
     const mandado = mandadoTotal(period);
+
+    // Recordatorios de pagos próximos (ver js/services/remindersService.js) — independiente
+    // del mes/año que se esté navegando (siempre "próximos N días desde hoy"), por eso se
+    // monta antes que nada, no dentro del bloque scoped al mes seleccionado.
+    const remindersDaysAhead = State.getSettings().remindersDaysAhead || DEFAULT_REMINDERS_DAYS_AHEAD;
+    const reminderBanner = renderReminderBanner(remindersDaysAhead);
+    if (reminderBanner) root.appendChild(reminderBanner);
 
     root.appendChild(renderHeader());
     root.appendChild(renderMonthYearNav({ month, year, onChange: (m, y) => { month = m; year = y; persist(); render(); } }));

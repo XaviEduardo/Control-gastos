@@ -4,11 +4,14 @@
 import State from '../../core/state.js';
 import { createCategoryRepository } from '../shared/category-repository.js';
 import ExpenseRepository from '../expenses/expense.repository.js';
+import ExpensePaymentRepository from '../expenses/expense-payment.repository.js';
 import { renderStatCard } from '../../components/stat-card.js';
 import { renderProgressCard } from '../../components/progress-card.js';
 import { renderMonthYearNav } from '../../components/month-year-nav.js';
+import { iconMarkup } from '../../components/icons.js';
+import { showToast } from '../../components/toast.js';
 import { formatMoney, kpiDelta } from '../../core/currency.js';
-import { endOfMonth } from '../../core/dates.js';
+import { endOfMonth, toISODate, formatDateShort } from '../../core/dates.js';
 import {
   totalIncome, totalExpenses, expensesByCategory, previousPeriod, getPeriodRange, mandadoTotal,
 } from '../../services/financeService.js';
@@ -69,6 +72,7 @@ export function renderMonthlyModule(container) {
     if (monthlyBudget) sections.push(progressCardSpaced('Presupuesto mensual', budgetProgress(monthlyBudget, period), { icon: 'target' }));
     if (groceryBudget) sections.push(progressCardSpaced('Mandado', budgetProgress(groceryBudget, period), { icon: 'cart', amountFirst: true }));
     sections.push(
+      renderExpenseChecklist(period),
       renderCategoryBreakdown(period),
       renderTopExpenses(period),
     );
@@ -112,6 +116,92 @@ export function renderMonthlyModule(container) {
     grid.appendChild(renderStatCard('Promedio semanal de gasto', formatMoney(weeklyAvg), { icon: 'calendar' }));
 
     return grid;
+  }
+
+  // "Marcar pagado" llevado de Calendario a Mensual (ver expense-payment.repository.js): a
+  // diferencia de topExpenses() (que agrupa ocurrencias de un mismo gasto en una sola fila),
+  // aquí se expande CADA ocurrencia por separado — es un checklist de "qué falta pagar este
+  // mes", no un ranking por monto.
+  function monthlyExpenseOccurrences(period) {
+    const [start, end] = getPeriodRange(period);
+    const rows = [];
+    ExpenseRepository.list().forEach((expense) => {
+      getOccurrencesInRange(expense, start, end).forEach((occ) => {
+        rows.push({ expense, occurrenceDate: toISODate(occ) });
+      });
+    });
+    return rows.sort((a, b) => a.occurrenceDate.localeCompare(b.occurrenceDate));
+  }
+
+  function renderExpenseChecklist(period) {
+    const card = document.createElement('div');
+    card.className = 'card mb-md';
+
+    const rows = monthlyExpenseOccurrences(period);
+    const paidCount = rows.filter((r) => ExpensePaymentRepository.isPaid(r.expense.id, r.occurrenceDate)).length;
+
+    const title = document.createElement('div');
+    title.className = 'card-title mb-md';
+    title.textContent = rows.length ? `Gastos del mes — ${paidCount} de ${rows.length} pagados` : 'Gastos del mes';
+    card.appendChild(title);
+
+    if (!rows.length) {
+      const empty = document.createElement('p');
+      empty.className = 'text-muted';
+      empty.textContent = 'Sin gastos este mes.';
+      card.appendChild(empty);
+      return card;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'movement-list';
+    rows.forEach(({ expense, occurrenceDate }) => list.appendChild(renderExpenseChecklistRow(expense, occurrenceDate)));
+    card.appendChild(list);
+    return card;
+  }
+
+  function renderExpenseChecklistRow(expense, occurrenceDate) {
+    const categoryName = categoryRepo.list().find((c) => c.id === expense.categoryId)?.name || 'Sin categoría';
+    const payment = ExpensePaymentRepository.find(expense.id, occurrenceDate);
+    const isPaid = !!payment;
+
+    const row = document.createElement('div');
+    row.className = `movement-row${isPaid ? ' movement-row--paid' : ''}`;
+
+    const checkboxWrap = document.createElement('label');
+    checkboxWrap.className = 'movement-row__checkbox-wrap';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isPaid;
+    checkbox.setAttribute('aria-label', `Marcar "${expense.description}" (${formatDateShort(occurrenceDate)}) como pagado`);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        ExpensePaymentRepository.markPaid(expense.id, occurrenceDate, toISODate(new Date()));
+        showToast('Gasto marcado como pagado');
+      } else {
+        ExpensePaymentRepository.markUnpaid(expense.id, occurrenceDate);
+      }
+      render();
+    });
+    checkboxWrap.appendChild(checkbox);
+
+    const icon = document.createElement('span');
+    icon.className = 'movement-row__icon movement-row__icon--expense';
+    icon.innerHTML = iconMarkup('trending-down', { size: 18 });
+
+    const body = document.createElement('div');
+    body.className = 'movement-row__body';
+    body.innerHTML = `
+      <div class="movement-row__title">${escapeHtml(expense.description)}</div>
+      <div class="movement-row__subtitle">${escapeHtml(categoryName)} · ${formatDateShort(occurrenceDate)}${isPaid ? ` · Pagado el ${escapeHtml(formatDateShort(payment.paidDate))}` : ''}</div>
+    `;
+
+    const amount = document.createElement('span');
+    amount.className = 'movement-row__amount';
+    amount.textContent = `-${formatMoney(expense.amount)}`;
+
+    row.append(checkboxWrap, icon, body, amount);
+    return row;
   }
 
   function renderCategoryBreakdown(period) {

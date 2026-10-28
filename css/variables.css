@@ -86,3 +86,63 @@
 
   --transition-fast: 150ms ease;
 }
+
+/* ---------- Modo oscuro ----------
+   Dos selectores con el MISMO bloque de valores a propósito (CSS plano, sin preprocesador —
+   ver CLAUDE.md "sin build"): el primero sigue la preferencia del sistema operativo
+   (`prefers-color-scheme`) cuando el usuario no fijó nada explícito (`data-theme` ausente o
+   distinto de "light"); el segundo aplica cuando el usuario elige "Oscuro" a mano en
+   Configuración (ver js/core/theme.js), sin importar la preferencia del sistema. Si se ajusta
+   un valor aquí, hay que replicarlo en ambos bloques — quedan uno junto al otro para que sea
+   fácil no olvidarlo. Solo tokens de color: spacing/radius/tipografía/sombras no cambian. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-primary: #6366F1;
+    --color-primary-hover: #818CF8;
+    --color-primary-soft: rgba(99, 102, 241, 0.18);
+    --color-primary-strong: #312C85;
+
+    --color-bg: #0F1016;
+    --color-surface: #181A23;
+    --color-surface-secondary: #20222D;
+    --color-border: #2B2E3B;
+
+    --color-text: #F1F2F8;
+    --color-text-secondary: #B6B9CC;
+    --color-text-muted: #80839A;
+
+    --color-success: #34D399;
+    --color-success-soft: rgba(52, 211, 153, 0.16);
+    --color-warning: #F2B84B;
+    --color-warning-soft: rgba(242, 184, 75, 0.16);
+    --color-danger: #F2555C;
+    --color-danger-soft: rgba(242, 85, 92, 0.16);
+    --color-info: #6366F1;
+    --color-info-soft: rgba(99, 102, 241, 0.18);
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-primary: #6366F1;
+  --color-primary-hover: #818CF8;
+  --color-primary-soft: rgba(99, 102, 241, 0.18);
+  --color-primary-strong: #312C85;
+
+  --color-bg: #0F1016;
+  --color-surface: #181A23;
+  --color-surface-secondary: #20222D;
+  --color-border: #2B2E3B;
+
+  --color-text: #F1F2F8;
+  --color-text-secondary: #B6B9CC;
+  --color-text-muted: #80839A;
+
+  --color-success: #34D399;
+  --color-success-soft: rgba(52, 211, 153, 0.16);
+  --color-warning: #F2B84B;
+  --color-warning-soft: rgba(242, 184, 75, 0.16);
+  --color-danger: #F2555C;
+  --color-danger-soft: rgba(242, 85, 92, 0.16);
+  --color-info: #6366F1;
+  --color-info-soft: rgba(99, 102, 241, 0.18);
+}

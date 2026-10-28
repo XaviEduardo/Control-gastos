@@ -398,6 +398,14 @@
 .movement-row__title { font-weight: var(--font-weight-medium); font-size: var(--font-size-md); overflow-wrap: anywhere; }
 .movement-row__subtitle { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: 2px; }
 .movement-row__amount { font-weight: var(--font-weight-bold); font-size: var(--font-size-md); white-space: nowrap; }
+
+/* "Marcar gasto como pagado" (Calendario, ver calendar.module.js) — mismo patrón visual que
+   .grocery-item-row--purchased/__checkbox-wrap (Mandado), para que ambas marcas de "hecho" se
+   sientan consistentes en toda la app. */
+.movement-row__checkbox-wrap { display: flex; align-items: center; flex-shrink: 0; cursor: pointer; }
+.movement-row__checkbox-wrap input { width: 20px; height: 20px; }
+.movement-row--paid { opacity: 0.6; }
+.movement-row--paid .movement-row__title { text-decoration: line-through; }
 .movement-row__amount--income { color: var(--color-success); }
 
 .progress-bar { background: var(--color-bg); border-radius: 999px; height: 10px; overflow: hidden; }

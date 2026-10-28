@@ -14,12 +14,12 @@ import { emit } from './events.js';
 import { supabase } from './supabaseClient.js';
 
 const STORAGE_KEY = 'control-gastos:data';
-const CURRENT_VERSION = 6;
+const CURRENT_VERSION = 7;
 let currentUserId = null;
 
 const COLLECTION_KEYS = [
   'incomes', 'incomeTypes',
-  'expenses', 'expenseCategories',
+  'expenses', 'expenseCategories', 'expensePayments',
   'movementTemplates',
   'groceryCategories', 'groceryProducts', 'productVariants',
   'stores', 'storeChains', 'storeBranches', 'prices',
@@ -63,6 +63,12 @@ function writeLocalCache(document) {
   }
 }
 
+async function deleteRemote() {
+  if (!currentUserId) return;
+  const { error } = await supabase.from('app_data').delete().eq('user_id', currentUserId);
+  if (error) throw error;
+}
+
 async function readRemote() {
   if (!currentUserId) return null;
   const { data, error } = await supabase
@@ -74,12 +80,28 @@ async function readRemote() {
   return data ? data.doc : null;
 }
 
-async function writeRemote(document) {
+async function writeRemoteNow(document) {
   if (!currentUserId) return;
   const { error } = await supabase
     .from('app_data')
     .upsert({ user_id: currentUserId, doc: document, updated_at: new Date().toISOString() });
   if (error) throw error;
+}
+
+// Las escrituras a Supabase se encadenan en orden de llegada (no se disparan en paralelo). Sin
+// esto, dos mutaciones seguidas (ej. editar cantidad y luego precio) podían viajar como dos
+// peticiones concurrentes y, si la más vieja respondía DESPUÉS que la más nueva, terminaba
+// sobrescribiendo el cambio más reciente con uno desactualizado — bug real detectado por el
+// usuario ("a veces no se guardan los datos que voy generando"). Cada escritura sigue mandando
+// el documento COMPLETO más reciente en el momento en que le toca su turno (no un diff), así que
+// encadenarlas garantiza que la última en encolarse sea también la última en aplicarse.
+let remoteWriteQueue = Promise.resolve();
+function writeRemote(document) {
+  const run = remoteWriteQueue.then(() => writeRemoteNow(document));
+  // Nunca dejar la cadena "rota" por un rechazo: si esta escritura falla, la siguiente debe
+  // poder intentarlo de todos modos.
+  remoteWriteQueue = run.catch(() => {});
+  return run;
 }
 
 // Firma síncrona preservada (todos los llamadores existentes —State.setCollection/setSettings,
@@ -216,12 +238,24 @@ function migrateV5ToV6(doc) {
   return { ...doc, productVariants };
 }
 
+/** "Marcar gasto como pagado" (ver docs/decisions.md): nueva colección `expensePayments`,
+ * vacía por defecto — no hay nada que migrar desde `expenses` (el estado de pago nunca existió
+ * antes). Un `Expense` recurrente no se marca pagado como registro completo (rompería la regla
+ * de "nunca duplicar por ocurrencia"): cada `ExpensePayment` referencia `expenseId` +
+ * `occurrenceDate` (la fecha concreta de esa ocurrencia, ya calculada por
+ * `recurrenceService#getOccurrencesInRange`), así una misma `Expense` recurrente puede tener
+ * varias ocurrencias marcadas independientemente sin tocar el registro base. */
+function migrateV6ToV7(doc) {
+  return { ...doc, expensePayments: doc.expensePayments || [] };
+}
+
 const MIGRATIONS = {
   1: migrateV1ToV2,
   2: migrateV2ToV3,
   3: migrateV3ToV4,
   4: migrateV4ToV5,
   5: migrateV5ToV6,
+  6: migrateV6ToV7,
 };
 
 /** Aplica, en orden, solo las migraciones pendientes (version actual -> CURRENT_VERSION).
@@ -357,9 +391,13 @@ const StorageService = {
   clear() {
     doc = emptyDocument();
     localStorage.removeItem(STORAGE_KEY);
-    // Sincroniza el documento vacío a la nube también (si no, "Restablecer datos" solo
-    // limpiaría este dispositivo y el próximo load() volvería a traer los datos viejos).
-    writeRemote(doc).catch((error) => emit('sync:error', error));
+    // BUG real corregido (ver docs/decisions.md): subir un documento VACÍO a la nube hacía que
+    // el próximo load() lo encontrara como "ya hay datos, son 0 de todo" en vez de "no hay
+    // nada" — eso impedía que init() volviera a sembrar los datos de ejemplo tras un reset,
+    // que es justo lo que "Restablecer datos" promete en su propio subtítulo. Borrar la fila
+    // (en vez de vaciarla) hace que el próximo load()/init() la trate como ausente, igual que
+    // el caso de un usuario nuevo, y sí reseeding.
+    deleteRemote().catch((error) => emit('sync:error', error));
     return true;
   },
 

@@ -9,6 +9,8 @@ import State from '../../core/state.js';
 import StorageService from '../../core/storage.js';
 import { setCurrency } from '../../core/currency.js';
 import { signOut } from '../../core/auth.js';
+import { getTheme, setTheme } from '../../core/theme.js';
+import { DEFAULT_REMINDERS_DAYS_AHEAD } from '../../services/remindersService.js';
 import { confirmDialog } from '../../components/confirm-dialog.js';
 import { showToast } from '../../components/toast.js';
 import { iconMarkup } from '../../components/icons.js';
@@ -22,10 +24,19 @@ const CURRENCY_OPTIONS = [
   { value: 'EUR', label: 'EUR — Euro' },
 ];
 
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Claro' },
+  { value: 'dark', label: 'Oscuro' },
+  { value: 'system', label: 'Sistema' },
+];
+
+const REMINDERS_DAYS_OPTIONS = [3, 7, 14, 30];
+
 const COLLECTION_LABELS = {
   incomes: 'Ingresos',
   incomeTypes: 'Tipos de ingreso',
   expenses: 'Gastos',
+  expensePayments: 'Gastos marcados como pagados',
   movementTemplates: 'Plantillas de movimientos',
   expenseCategories: 'Categorías de gasto',
   groceryCategories: 'Categorías de mandado',
@@ -47,6 +58,8 @@ export function renderSettingsModule(container) {
     root.append(
       renderHeader(),
       renderPreferencesSection(),
+      renderAppearanceSection(),
+      renderRemindersSection(),
       renderMovementTemplatesSection({ onChange: render }),
       renderDataSection(),
       renderBackupSection(),
@@ -132,6 +145,52 @@ export function renderSettingsModule(container) {
 
     const row = settingsControlRow({ icon: 'wallet', title: 'Moneda', control: select });
     return renderSection('Preferencias', [row]);
+  }
+
+  // ---------- Apariencia ----------
+
+  function renderAppearanceSection() {
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', 'Apariencia');
+    select.style.width = 'auto';
+    select.innerHTML = THEME_OPTIONS.map((t) => `<option value="${t.value}">${escapeHtml(t.label)}</option>`).join('');
+    select.value = getTheme();
+    select.addEventListener('change', () => {
+      setTheme(select.value);
+      showToast('Apariencia actualizada');
+    });
+
+    const row = settingsControlRow({
+      icon: 'settings',
+      title: 'Apariencia',
+      subtitle: '"Sistema" sigue el modo claro/oscuro de tu dispositivo',
+      control: select,
+    });
+    return renderSection('Apariencia', [row]);
+  }
+
+  // ---------- Recordatorios ----------
+
+  function renderRemindersSection() {
+    const settings = State.getSettings();
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', 'Días de anticipación para recordatorios');
+    select.style.width = 'auto';
+    select.innerHTML = REMINDERS_DAYS_OPTIONS.map((d) => `<option value="${d}">${d} días</option>`).join('');
+    select.value = String(settings.remindersDaysAhead || DEFAULT_REMINDERS_DAYS_AHEAD);
+    select.addEventListener('change', () => {
+      State.setSettings({ remindersDaysAhead: Number(select.value) });
+      showToast('Recordatorios actualizados');
+      render();
+    });
+
+    const row = settingsControlRow({
+      icon: 'bell',
+      title: 'Recordatorios',
+      subtitle: 'Avisar en el Dashboard de gastos próximos sin marcar como pagados',
+      control: select,
+    });
+    return renderSection('Recordatorios', [row]);
   }
 
   // ---------- Datos (información del almacenamiento) ----------
@@ -295,15 +354,19 @@ export function renderSettingsModule(container) {
       onAction: async () => {
         const confirmed = await confirmDialog({
           title: 'Restablecer datos',
-          message: '¿Estás seguro de que deseas eliminar TODOS los datos? Esta acción no se puede deshacer.',
+          message: '¿Estás seguro de que deseas eliminar TODOS los datos? Se descargará un respaldo automático antes de borrar, por seguridad. Esta acción no se puede deshacer.',
           confirmText: 'Eliminar todo',
           danger: true,
         });
         if (!confirmed) return;
 
+        // Red de seguridad (ver docs/decisions.md): un reset ya NO puede ser una pérdida total
+        // e irreversible — siempre queda un .json descargado con el estado justo antes de
+        // borrar, aunque un bug futuro vuelva a romper algo en el camino.
+        exportBackup();
         StorageService.clear();
-        showToast('Datos restablecidos. Recargando la aplicación…');
-        setTimeout(() => window.location.reload(), 700);
+        showToast('Respaldo descargado y datos restablecidos. Recargando la aplicación…');
+        setTimeout(() => window.location.reload(), 900);
       },
     });
     return renderSection('Restablecer', [row]);

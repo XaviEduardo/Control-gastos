@@ -32,6 +32,11 @@ const PATHS = {
   'rotate-ccw': '<polyline points="1,4 1,10 7,10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
   'chevron-left': '<polyline points="15,6 9,12 15,18"/>',
   'chevron-right': '<polyline points="9,6 15,12 9,18"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3,7 12,13 21,7"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  'eye-off': '<path d="M9.9 4.24A10.4 10.4 0 0 1 12 4c6.5 0 10 7 10 7a17.6 17.6 0 0 1-2.9 4.06M6.1 6.1A17.9 17.9 0 0 0 2 11s3.5 7 10 7a10.4 10.4 0 0 0 4.17-.84"/><path d="M10.6 10.6a3 3 0 0 0 4.2 4.2"/><line x1="3" y1="3" x2="21" y2="21"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
 };
 
 /** Devuelve el string <svg>...</svg> del icono `name` (cae a "receipt" si no existe). */

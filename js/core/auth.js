@@ -9,10 +9,12 @@ export async function getSession() {
   return data.session;
 }
 
-// Notifica cada vez que cambia la sesión (login, logout, refresh de token). Devuelve la
-// suscripción por si en el futuro hace falta cancelarla (hoy vive mientras viva la pestaña).
+// Notifica cada vez que cambia la sesión (login, logout, refresh de token, o el evento especial
+// 'PASSWORD_RECOVERY' cuando el usuario llega desde el link de "¿Olvidaste tu contraseña?").
+// Devuelve la suscripción por si en el futuro hace falta cancelarla (hoy vive mientras viva la
+// pestaña).
 export function onAuthStateChange(callback) {
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
+  const { data } = supabase.auth.onAuthStateChange((event, session) => callback(session, event));
   return data.subscription;
 }
 
@@ -28,5 +30,20 @@ export async function signUpWithPassword(email, password) {
 
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
+// Envía el correo de "restablecer contraseña". redirectTo apunta a la app misma (sin query ni
+// hash) — Supabase agrega sus propios parámetros al volver, y auth-gate.js detecta el evento
+// 'PASSWORD_RECOVERY' resultante para mostrar el formulario de nueva contraseña en vez de
+// dejar pasar directo al dashboard.
+export async function sendPasswordReset(email) {
+  const redirectTo = window.location.href.split('#')[0].split('?')[0];
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+}
+
+export async function updatePassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) throw error;
 }
