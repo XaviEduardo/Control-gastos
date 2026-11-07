@@ -1,4 +1,7 @@
-# V2 — Análisis del estado actual
+# V2 — Análisis histórico del estado actual
+
+> Este análisis fue escrito antes de que V2-0 a V2-9 y la primera integración con Supabase fueran
+> implementadas. Para el estado real del repositorio consultar [`current-architecture.md`](current-architecture.md).
 
 > Documento de análisis únicamente. No implica cambios de código. Ver `v2-data-model.md`,
 > `v2-roadmap.md` y `v2-migration-plan.md` para el detalle de modelo/fases/migración.
@@ -7,10 +10,10 @@
 
 - **Stack**: HTML5 + CSS3 + JS Vanilla ES6 (módulos nativos), sin build, sin framework, Chart.js
   por CDN, desplegado en GitHub Pages (rutas hash, imports relativos — confirmado en PASS 6).
-- **Persistencia**: un único blob JSON en `localStorage['control-gastos:data']`
-  (`js/core/storage.js`). El documento ya tiene `version` (actualmente `1`) y una función
-  `migrate(raw)` (hoy un simple merge con el documento vacío) — **la app ya tiene el punto de
-  extensión para versionado de esquema; no hay que construirlo desde cero.**
+- **Persistencia histórica**: en el momento de este análisis existía un único blob JSON en
+  `localStorage['control-gastos:data']`, con versión `1`. Actualmente la fuente remota es
+  Supabase, la caché está particionada por usuario y el documento va en versión `7`; consultar
+  `current-architecture.md` y `js/core/storage.js` para el estado vigente.
 - **Capas**: UI (`js/modules/*.module.js`) → `services/*.js` (cálculo puro) →
   `*.repository.js` (CRUD sobre `State`) → `State` (caché en memoria + eventos) →
   `StorageService` (único punto de contacto con `localStorage`). Esta separación ya existe y es

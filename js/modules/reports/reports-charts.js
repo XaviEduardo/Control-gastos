@@ -4,8 +4,7 @@
 
 import { totalIncome, totalExpenses, expensesByCategory, incomeByType } from '../../services/financeService.js';
 import { MONTH_NAMES, startOfWeek, formatDateShort } from '../../core/dates.js';
-
-const CHART_COLORS = ['#4F46E5', '#17A567', '#C98A1E', '#DC4949', '#6b7280', '#0ea5e9', '#a855f7', '#f97316'];
+import { getChartPalette, getChartOptions } from '../../core/chart-theme.js';
 
 export function chartCard(title) {
   const card = document.createElement('div');
@@ -24,6 +23,7 @@ export function noDataCard(title, message) {
 // ---------- Gastos por categoría / Ingresos por fuente ----------
 
 export function renderCategoryChart(grid, period, charts) {
+  const chartColors = getChartPalette();
   const breakdown = expensesByCategory(period).filter((b) => b.total > 0);
   if (!breakdown.length) {
     grid.appendChild(noDataCard('Gastos por categoría', 'Sin gastos en este periodo.'));
@@ -36,13 +36,14 @@ export function renderCategoryChart(grid, period, charts) {
     type: 'doughnut',
     data: {
       labels: breakdown.map((b) => b.category.name),
-      datasets: [{ data: breakdown.map((b) => b.total), backgroundColor: breakdown.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]) }],
+      datasets: [{ data: breakdown.map((b) => b.total), backgroundColor: breakdown.map((_, i) => chartColors[i % chartColors.length]) }],
     },
-    options: { responsive: true, maintainAspectRatio: false },
+    options: getChartOptions(),
   }));
 }
 
 export function renderIncomeChart(grid, period, charts) {
+  const chartColors = getChartPalette();
   const breakdown = incomeByType(period).filter((b) => b.total > 0);
   if (!breakdown.length) {
     grid.appendChild(noDataCard('Ingresos por fuente', 'Sin ingresos en este periodo.'));
@@ -55,9 +56,9 @@ export function renderIncomeChart(grid, period, charts) {
     type: 'pie',
     data: {
       labels: breakdown.map((b) => b.type.name),
-      datasets: [{ data: breakdown.map((b) => b.total), backgroundColor: breakdown.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]) }],
+      datasets: [{ data: breakdown.map((b) => b.total), backgroundColor: breakdown.map((_, i) => chartColors[i % chartColors.length]) }],
     },
-    options: { responsive: true, maintainAspectRatio: false },
+    options: getChartOptions(),
   }));
 }
 
@@ -82,6 +83,7 @@ function trendPeriods(period, count) {
 }
 
 export function renderTrendChart(grid, period, charts, periodLabelLower) {
+  const chartColors = getChartPalette();
   const count = period.type === 'year' ? 5 : 6;
   const points = trendPeriods(period, count);
   const incomeSeries = points.map((p) => totalIncome(p.period));
@@ -100,10 +102,10 @@ export function renderTrendChart(grid, period, charts, periodLabelLower) {
     data: {
       labels: points.map((p) => p.label),
       datasets: [
-        { label: 'Ingresos', data: incomeSeries, borderColor: CHART_COLORS[1], backgroundColor: 'transparent', tension: 0.2 },
-        { label: 'Gastos', data: expenseSeries, borderColor: CHART_COLORS[3], backgroundColor: 'transparent', tension: 0.2 },
+        { label: 'Ingresos', data: incomeSeries, borderColor: chartColors[1], backgroundColor: 'transparent', tension: 0.2 },
+        { label: 'Gastos', data: expenseSeries, borderColor: chartColors[3], backgroundColor: 'transparent', tension: 0.2 },
       ],
     },
-    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } },
+    options: getChartOptions({ yBeginAtZero: true }),
   }));
 }

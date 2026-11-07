@@ -203,11 +203,16 @@ export function renderSettingsModule(container) {
       label,
       count: Array.isArray(data[key]) ? data[key].length : 0,
     }));
-    return { sizeKB, counts, lastUpdated: StorageService.getLastUpdated() };
+    return { sizeKB, counts, lastUpdated: StorageService.getLastUpdated(), sync: StorageService.getSyncStatus() };
   }
 
   function renderDataSection() {
-    const { sizeKB, counts, lastUpdated } = storageStats();
+    const { sizeKB, counts, lastUpdated, sync } = storageStats();
+    const syncText = sync.state === 'syncing'
+      ? 'sincronizando...'
+      : sync.state === 'error'
+        ? 'guardado local - pendiente de nube'
+        : 'sincronizado con la nube';
     const lastUpdatedText = lastUpdated ? formatDateTime(lastUpdated) : 'todavía no se ha guardado nada';
 
     const row = document.createElement('div');
@@ -216,7 +221,7 @@ export function renderSettingsModule(container) {
       <span class="kpi-card__icon">${iconMarkup('bar-chart', { size: 18 })}</span>
       <span class="settings-row__body">
         <span class="settings-row__title">Uso de almacenamiento</span>
-        <span class="settings-row__subtitle">localStorage · ${sizeKB} KB · Último guardado: ${escapeHtml(lastUpdatedText)}</span>
+        <span class="settings-row__subtitle">Supabase + cache local · ${sizeKB} KB · ${escapeHtml(syncText)} · Ultimo cambio: ${escapeHtml(lastUpdatedText)}</span>
       </span>
     `;
 
@@ -364,7 +369,11 @@ export function renderSettingsModule(container) {
         // e irreversible — siempre queda un .json descargado con el estado justo antes de
         // borrar, aunque un bug futuro vuelva a romper algo en el camino.
         exportBackup();
-        StorageService.clear();
+        const cleared = await StorageService.clear();
+        if (!cleared) {
+          showToast('Los datos locales se borraron, pero no se pudo confirmar el borrado en la nube.', { type: 'error' });
+          return;
+        }
         showToast('Respaldo descargado y datos restablecidos. Recargando la aplicación…');
         setTimeout(() => window.location.reload(), 900);
       },

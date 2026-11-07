@@ -15,8 +15,7 @@ import { renderEmptyState } from '../../components/empty-state.js';
 import { formatMoney } from '../../core/currency.js';
 import { formatDateShort, parseFlexibleDate } from '../../core/dates.js';
 import { escapeHtml } from '../../core/validators.js';
-
-const CHART_COLORS = ['#4F46E5', '#17A567', '#C98A1E', '#DC4949', '#6b7280', '#0ea5e9', '#a855f7', '#f97316'];
+import { getChartPalette, getChartOptions } from '../../core/chart-theme.js';
 
 function listsInPeriod(period) {
   const [start, end] = getPeriodRange(period);
@@ -141,6 +140,7 @@ export function renderPriceEvolutionSection(parent, state, charts, onChange) {
   chartWrapper.innerHTML = '<canvas></canvas>';
   wrap.appendChild(chartWrapper); // insertar antes de instanciar Chart.js (evita canvas 0x0)
 
+  const chartColors = getChartPalette();
   const datasets = storeIds.map((storeId, i) => {
     const store = StoreRepository.getById(storeId);
     const byDate = new Map();
@@ -151,7 +151,7 @@ export function renderPriceEvolutionSection(parent, state, charts, onChange) {
     return {
       label: store?.name || 'Tienda',
       data: dateLabels.map((d) => (byDate.has(d) ? byDate.get(d) : null)),
-      borderColor: CHART_COLORS[i % CHART_COLORS.length],
+      borderColor: chartColors[i % chartColors.length],
       backgroundColor: 'transparent',
       spanGaps: false,
       tension: 0.2,
@@ -162,7 +162,7 @@ export function renderPriceEvolutionSection(parent, state, charts, onChange) {
   charts.push(new Chart(ctx, {
     type: 'line',
     data: { labels: dateLabels.map((d) => formatDateShort(d)), datasets },
-    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: `$/${baseUnit}` } } } },
+    options: getChartOptions({ yBeginAtZero: true, yTitle: `$/${baseUnit}` }),
   }));
 }
 

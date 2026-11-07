@@ -3,7 +3,7 @@
 // se dejan pasar intactas sin pasar por 'respondWith' en absoluto — esta app sincroniza datos
 // reales en vivo con Supabase, así que esas peticiones NUNCA deben servirse desde caché.
 
-const CACHE_NAME = 'control-gastos-shell-v1';
+const CACHE_NAME = 'control-gastos-shell-v3';
 
 const APP_SHELL = [
   './',
@@ -28,6 +28,8 @@ const APP_SHELL = [
   './js/core/auth.js',
   './js/core/auth-gate.js',
   './js/core/supabaseClient.js',
+  './js/core/theme.js',
+  './js/core/chart-theme.js',
   './js/data/seed.js',
   './js/components/action-menu.js',
   './js/components/confirm-dialog.js',

@@ -1,7 +1,7 @@
 # Control de Gastos — App de finanzas personales + mandado
 
 ## Propósito
-Reemplazar `Control_de_Gastos.xlsx` con una app web local para ingresos, gastos, presupuesto, vista semanal/mensual, mandado/canasta básica, tiendas, precios/comparador y reportes.
+Aplicación web personal para ingresos, gastos, presupuesto, vista semanal/mensual, mandado/canasta básica, tiendas, precios/comparador y reportes. Se despliega como SPA/PWA estática en GitHub Pages y sincroniza los datos autenticados con Supabase.
 
 ## Stack (v1, actualizado — Fase 1 Supabase)
 HTML5 + CSS3 + JS Vanilla ES6 (módulos nativos). Sin build, sin frameworks. Chart.js y
@@ -20,11 +20,13 @@ Server o `python -m http.server`.
 - No sobre-arquitecturar: módulos pequeños, sin abstracciones para casos hipotéticos.
 
 ## Dónde consultar
+- `docs/current-architecture.md` — referencia canónica de la arquitectura que realmente ejecuta el repositorio.
 - `docs/excel-analysis.md` — referencia funcional original (hojas, fórmulas, datos reales del Excel).
-- `docs/architecture.md` — estructura de carpetas, capas, StorageService, patrón de módulos.
-- `docs/data-model.md` — entidades y su forma exacta.
+- `docs/architecture.md` — arquitectura v1 histórica; contrastar con `current-architecture.md`.
+- `docs/data-model.md` — modelo v1 histórico; el modelo vigente es el documento versión 7 descrito en `current-architecture.md`.
 - `docs/roadmap.md` — fases, estado de cada una, backlog priorizado, criterios de aceptación.
 - `docs/decisions.md` — decisiones ya tomadas (no reabrir sin motivo nuevo).
+- `docs/v2-*.md` — análisis y planes históricos; no asumir que una fase siga pendiente sin verificar el código.
 
 ## Delegación (Tech Lead orquesta, agentes con alcance acotado)
 - **Excel Analyst**: ya ejecutado, no se re-invoca salvo dato faltante puntual.

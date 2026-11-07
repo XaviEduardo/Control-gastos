@@ -1,7 +1,11 @@
-# V2 — Modelo de datos
+# V2 — Modelo de datos (Histórico de migración)
 
-> Solo análisis/propuesta. Ningún esquema aquí está implementado todavía. Los ejemplos de forma
-> de entidad usan notación `{campo: tipo}` — no son código.
+> La propuesta de este documento fue implementada parcialmente mediante migraciones hasta la
+> versión 7. La forma vigente y los campos de compatibilidad se documentan en
+> [`current-architecture.md`](current-architecture.md).
+
+> El documento conserva análisis y propuestas de la etapa V2. Algunas formas ya fueron absorbidas
+> por las migraciones actuales; los ejemplos usan notación `{campo: tipo}` y no son código.
 
 ## 1. Entidades actuales relevantes (verificadas leyendo el repositorio real)
 

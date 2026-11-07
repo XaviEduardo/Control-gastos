@@ -1,9 +1,12 @@
-# V2 — Plan de migración de datos
+# V2 — Plan de migración de datos (Histórico)
 
-> Solo planificación. Ninguna migración de este documento está implementada. Regla
-> transversal: **NO borrar `localStorage`, NO resetear datos, NO perder ninguna fila
-> existente.** Toda migración es aditiva y se apoya en el `version`/`migrate()` que ya existe
-> en `js/core/storage.js` (hoy `CURRENT_VERSION = 1`).
+> Este plan documenta migraciones ya ejecutadas o absorbidas por `js/core/storage.js`. No ejecutar
+> una migración manual desde este documento; revisar primero la versión actual del documento y
+> [`current-architecture.md`](current-architecture.md).
+
+> Fue el plan original. Sus migraciones fueron implementadas de forma aditiva en
+> `js/core/storage.js`; la versión vigente es 7. La regla transversal sigue siendo: **NO borrar
+> datos del usuario ni ejecutar manualmente este documento**.
 
 ## Principio general de toda migración de este plan
 

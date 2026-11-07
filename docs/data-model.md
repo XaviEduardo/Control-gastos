@@ -1,4 +1,8 @@
-# Modelo de datos
+# Modelo de datos v1 — Histórico
+
+> Este documento representa el modelo inicial. El documento persistido actual es versión 7 e
+> incluye variantes de producto, cadenas/sucursales, observaciones de precio y pagos de gastos.
+> Consultar [`current-architecture.md`](current-architecture.md) antes de cambiar entidades.
 
 Documento raíz persistido (versionado) — ver `decisions.md`:
 

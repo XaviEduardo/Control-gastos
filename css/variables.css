@@ -10,8 +10,11 @@
   /* ---------- Surfaces ---------- */
   --color-bg: #F6F7FB;
   --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
   --color-surface-secondary: #F1F2F8;
   --color-border: #E5E7F0;
+  --color-on-primary: #ffffff;
+  --color-focus: #6366F1;
 
   /* ---------- Text ---------- */
   --color-text: #15161F;
@@ -83,8 +86,10 @@
   /* ---------- Layout ---------- */
   --sidebar-width: 260px;
   --header-height: 64px;
+  --mobile-nav-height: 72px;
 
   --transition-fast: 150ms ease;
+  --transition-standard: 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* ---------- Modo oscuro ----------
@@ -104,8 +109,11 @@
 
     --color-bg: #0F1016;
     --color-surface: #181A23;
+    --color-surface-elevated: #20222D;
     --color-surface-secondary: #20222D;
     --color-border: #2B2E3B;
+    --color-on-primary: #ffffff;
+    --color-focus: #818CF8;
 
     --color-text: #F1F2F8;
     --color-text-secondary: #B6B9CC;
@@ -130,8 +138,11 @@
 
   --color-bg: #0F1016;
   --color-surface: #181A23;
+  --color-surface-elevated: #20222D;
   --color-surface-secondary: #20222D;
   --color-border: #2B2E3B;
+  --color-on-primary: #ffffff;
+  --color-focus: #818CF8;
 
   --color-text: #F1F2F8;
   --color-text-secondary: #B6B9CC;

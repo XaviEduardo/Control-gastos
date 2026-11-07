@@ -24,8 +24,8 @@ import {
 import { budgetProgress } from '../../services/budgetService.js';
 import { getOccurrencesInRange, frequencyLabel } from '../../services/recurrenceService.js';
 import BudgetRepository from '../budget/budget.repository.js';
+import { getChartPalette, getChartOptions } from '../../core/chart-theme.js';
 
-const CHART_COLORS = ['#4F46E5', '#17A567', '#C98A1E', '#DC4949', '#6b7280', '#0ea5e9', '#a855f7', '#f97316'];
 const UPCOMING_WINDOW_DAYS = 14;
 const UPCOMING_LIMIT = 5;
 
@@ -181,6 +181,7 @@ export function renderDashboardModule(container) {
   // dimensionado incluso con `responsive:true`.
 
   function renderIncomeVsExpenseChart(grid) {
+    const chartColors = getChartPalette();
     const months = [];
     for (let i = 5; i >= 0; i -= 1) {
       const d = new Date(year, month - i, 1);
@@ -205,15 +206,16 @@ export function renderDashboardModule(container) {
       data: {
         labels: months.map((m) => m.label),
         datasets: [
-          { label: 'Ingresos', data: incomeSeries, backgroundColor: CHART_COLORS[1], borderRadius: 4 },
-          { label: 'Gastos', data: expenseSeries, backgroundColor: CHART_COLORS[3], borderRadius: 4 },
+          { label: 'Ingresos', data: incomeSeries, backgroundColor: chartColors[1], borderRadius: 4 },
+          { label: 'Gastos', data: expenseSeries, backgroundColor: chartColors[3], borderRadius: 4 },
         ],
       },
-      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } },
+      options: getChartOptions({ yBeginAtZero: true }),
     }));
   }
 
   function renderCategoryChart(grid, period) {
+    const chartColors = getChartPalette();
     const breakdown = expensesByCategory(period).filter((b) => b.total > 0);
     if (!breakdown.length) {
       grid.appendChild(noDataCard('Gastos por categoría', 'Sin gastos este mes.'));
@@ -229,14 +231,15 @@ export function renderDashboardModule(container) {
         labels: breakdown.map((b) => b.category.name),
         datasets: [{
           data: breakdown.map((b) => b.total),
-          backgroundColor: breakdown.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+          backgroundColor: breakdown.map((_, i) => chartColors[i % chartColors.length]),
         }],
       },
-      options: { responsive: true, maintainAspectRatio: false },
+      options: getChartOptions(),
     }));
   }
 
   function renderWeeklyEvolutionChart(grid) {
+    const chartColors = getChartPalette();
     const start = startOfMonth(year, month);
     const end = endOfMonth(year, month);
     const weeks = [];
@@ -263,14 +266,15 @@ export function renderDashboardModule(container) {
       data: {
         labels: weeks.map((w) => w.label),
         datasets: [{
-          label: 'Gastos', data: weeks.map((w) => w.total), borderColor: CHART_COLORS[3], backgroundColor: 'transparent', tension: 0.3,
+          label: 'Gastos', data: weeks.map((w) => w.total), borderColor: chartColors[3], backgroundColor: 'transparent', tension: 0.3,
         }],
       },
-      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } },
+      options: getChartOptions({ yBeginAtZero: true }),
     }));
   }
 
   function renderIncomeDistributionChart(grid, period) {
+    const chartColors = getChartPalette();
     const breakdown = incomeByType(period).filter((b) => b.total > 0);
     if (!breakdown.length) {
       grid.appendChild(noDataCard('Distribución de ingresos', 'Sin ingresos este mes.'));
@@ -286,10 +290,10 @@ export function renderDashboardModule(container) {
         labels: breakdown.map((b) => b.type.name),
         datasets: [{
           data: breakdown.map((b) => b.total),
-          backgroundColor: breakdown.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+          backgroundColor: breakdown.map((_, i) => chartColors[i % chartColors.length]),
         }],
       },
-      options: { responsive: true, maintainAspectRatio: false },
+      options: getChartOptions(),
     }));
   }
 

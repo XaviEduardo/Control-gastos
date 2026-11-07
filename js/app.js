@@ -67,6 +67,17 @@ const NAV_GROUPS = [
   { title: 'General', links: ['/calendario', '/reportes', '/configuracion'] },
 ];
 
+// Navegación primaria para pantallas pequeñas. Se mantiene junto a NAV_GROUPS para que las
+// dos experiencias usen las mismas rutas reales y no creen una navegación paralela con datos
+// de presentación repartidos por cada módulo.
+const MOBILE_NAV_ITEMS = [
+  { path: '/dashboard', label: 'Inicio', icon: 'grid' },
+  { path: '/movimientos', label: 'Movimientos', icon: 'receipt' },
+  { path: '/mandado/lista', label: 'Mandado', icon: 'cart' },
+  { path: '/presupuesto', label: 'Presupuesto', icon: 'target' },
+  { action: 'menu', label: 'Más', icon: 'menu' },
+];
+
 function renderPlaceholder(meta) {
   return (container) => {
     container.appendChild(renderEmptyState({
@@ -146,31 +157,91 @@ function buildSidebarNav() {
   });
 }
 
+function buildMobileNav() {
+  const nav = document.getElementById('mobileNav');
+  if (!nav) return;
+  nav.innerHTML = '';
+
+  MOBILE_NAV_ITEMS.forEach((item) => {
+    const control = document.createElement(item.action ? 'button' : 'a');
+    control.className = 'mobile-nav__link';
+    control.dataset.route = item.path || '';
+    if (item.action === 'menu') {
+      control.type = 'button';
+      control.classList.add('mobile-nav__more');
+      control.dataset.mobileMenu = 'true';
+      control.setAttribute('aria-controls', 'sidebar');
+      control.setAttribute('aria-expanded', 'false');
+    } else {
+      control.href = `#${item.path}`;
+    }
+
+    const icon = document.createElement('span');
+    icon.className = 'mobile-nav__icon';
+    icon.innerHTML = iconMarkup(item.icon, { size: 20 });
+    const label = document.createElement('span');
+    label.className = 'mobile-nav__label';
+    label.textContent = item.label;
+    control.append(icon, label);
+    nav.appendChild(control);
+  });
+}
+
+function isMobileNavActive(path, item) {
+  if (item.action) return false;
+  if (item.path === '/mandado/lista') return path.startsWith('/mandado/');
+  return item.path === path;
+}
+
 function updatePageHeader(path) {
   const meta = ROUTE_META[path] || { title: 'Control de Gastos' };
   const titleEl = document.getElementById('pageTitle');
   if (titleEl) titleEl.textContent = meta.title;
 
+  const primaryMobileItemActive = MOBILE_NAV_ITEMS.some((item) => (
+    item.path && isMobileNavActive(path, item)
+  ));
+
   document.querySelectorAll('.sidebar__link').forEach((link) => {
     link.classList.toggle('sidebar__link--active', link.dataset.route === path);
+  });
+
+  document.querySelectorAll('.mobile-nav__link').forEach((link) => {
+    const item = MOBILE_NAV_ITEMS.find((entry) => (entry.path || '') === link.dataset.route)
+      || MOBILE_NAV_ITEMS.find((entry) => entry.action === 'menu' && link.dataset.mobileMenu === 'true');
+    const active = item
+      ? (item.action ? !primaryMobileItemActive : isMobileNavActive(path, item))
+      : false;
+    link.classList.toggle('mobile-nav__link--active', active);
+    if (active) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
   });
 
   document.body.classList.remove('sidebar-open');
   const toggle = document.getElementById('sidebarToggle');
   toggle?.setAttribute('aria-expanded', 'false');
   toggle?.setAttribute('aria-label', 'Abrir menú');
+  document.querySelector('[data-mobile-menu="true"]')?.setAttribute('aria-expanded', 'false');
 }
 
 function updateLastSavedLabel() {
   const label = document.getElementById('lastSavedLabel');
   if (!label) return;
   const lastUpdated = StorageService.getLastUpdated();
-  label.textContent = lastUpdated ? `Guardado ${formatDateShort(lastUpdated)}` : '';
+  const sync = StorageService.getSyncStatus();
+  if (sync.state === 'syncing') {
+    label.textContent = sync.pending > 1 ? `Guardando ${sync.pending} cambios…` : 'Guardando…';
+  } else if (sync.state === 'error') {
+    label.textContent = lastUpdated ? `Guardado local · pendiente de nube` : 'Pendiente de nube';
+  } else {
+    label.textContent = lastUpdated ? `Sincronizado ${formatDateShort(lastUpdated)}` : '';
+  }
 }
 
 function setupSidebarToggle() {
   const toggle = document.getElementById('sidebarToggle');
   const overlay = document.getElementById('sidebarOverlay');
+  const mobileMenuButton = document.querySelector('[data-mobile-menu="true"]');
   // Mismo umbral que el drawer en css/responsive.css (mobile < 640px).
   const desktopQuery = window.matchMedia('(min-width: 640px)');
 
@@ -178,11 +249,13 @@ function setupSidebarToggle() {
     document.body.classList.toggle('sidebar-open', open);
     toggle?.setAttribute('aria-expanded', String(open));
     toggle?.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+    mobileMenuButton?.setAttribute('aria-expanded', String(open));
   }
 
   toggle?.addEventListener('click', () => {
     setOpen(!document.body.classList.contains('sidebar-open'));
   });
+  mobileMenuButton?.addEventListener('click', () => setOpen(true));
   overlay?.addEventListener('click', () => setOpen(false));
 
   // Si el viewport crece a tablet/desktop mientras el drawer estaba abierto, se cierra.
@@ -225,6 +298,7 @@ async function bootstrap() {
 
   on('route:change', updatePageHeader);
   on('change', updateLastSavedLabel);
+  on('sync:status', updateLastSavedLabel);
   // No bloquea nada (ver storage.js#writeRaw): solo avisa si una escritura no llegó a la nube,
   // para que el usuario sepa que ese cambio por ahora solo vive en este dispositivo.
   on('sync:error', () => {
@@ -232,6 +306,7 @@ async function bootstrap() {
   });
 
   buildSidebarNav();
+  buildMobileNav();
   registerRoutes();
   setupSidebarToggle();
   setupQuickAdd();

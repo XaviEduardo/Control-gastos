@@ -161,3 +161,9 @@ Fecha: 2026-10-27
 Decisión: Botón flotante global ("FAB", `#fabAddExpense`) visible en toda la app tras login, que abre directo `openMovementForm({ type: 'expense' })` — SOLO gasto, no un menú con ingreso/mandado también.
 Motivo: gasto es el movimiento más frecuente (pedido explícito del usuario: "el más usado"); un menú de opciones habría sido más flexible pero más fricción para el caso común, justo lo contrario de "simplificar la captura". Reutiliza `movement-form.js` tal cual (ya usado por Calendario/Movimientos) — cero lógica de guardado nueva.
 Consecuencia: elemento fijo a nivel raíz del `<body>` (fuera de `#appShell`/`#authScreen`, mismo patrón que `#sidebarToggle`), oculto durante el login, con `z-index` igual a `.sidebar-toggle` (ambos son controles globales fijos) y por debajo de `.modal-overlay`/`.toast-container`. Pendiente documentado, no implementado: si más adelante se quiere acceso rápido también a Ingreso/Mandado desde el mismo botón, hace falta convertirlo en un menú — decisión deliberadamente pospuesta hasta que se pida.
+
+---
+Fecha: 2026-11-06
+Decisión: La caché local se particiona por `userId` (`control-gastos:data:<userId>`), y las operaciones remotas —incluido restablecer datos— pasan por una única cola ordenada.
+Motivo: la clave global anterior podía reutilizar datos de otra cuenta cuando Supabase no respondía; además, un borrado remoto paralelo a una escritura pendiente podía resucitar datos eliminados.
+Consecuencia: la clave global anterior se migra una sola vez al primer usuario autenticado de una instalación existente y después se elimina; la interfaz expone `guardando`, `sincronizado` o `pendiente de nube` sin bloquear el uso local.

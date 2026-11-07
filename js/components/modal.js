@@ -6,12 +6,14 @@ let activeModal = null;
 export function openModal({ title = '', content, footer, onClose, variant = 'form' } = {}) {
   closeModal();
 
+  const previousFocus = document.activeElement;
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
-    <div class="modal modal--${variant}" role="dialog" aria-modal="true" aria-label="${title}">
+    <div class="modal modal--${variant}" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal-header">
-        <h3 class="modal-title"></h3>
+        <h3 class="modal-title" id="modal-title"></h3>
         <button type="button" class="modal-close" aria-label="Cerrar">&times;</button>
       </div>
       <div class="modal-body"></div>
@@ -33,6 +35,7 @@ export function openModal({ title = '', content, footer, onClose, variant = 'for
     overlay.remove();
     document.removeEventListener('keydown', onKeydown);
     activeModal = null;
+    if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
     if (onClose) onClose();
   }
 
@@ -47,6 +50,7 @@ export function openModal({ title = '', content, footer, onClose, variant = 'for
   document.addEventListener('keydown', onKeydown);
 
   document.body.appendChild(overlay);
+  overlay.querySelector('.modal-close').focus();
   activeModal = { close };
   return { close, element: overlay };
 }

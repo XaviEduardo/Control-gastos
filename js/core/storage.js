@@ -14,8 +14,15 @@ import { emit } from './events.js';
 import { supabase } from './supabaseClient.js';
 
 const STORAGE_KEY = 'control-gastos:data';
+const LEGACY_STORAGE_KEY = STORAGE_KEY;
 const CURRENT_VERSION = 7;
 let currentUserId = null;
+let syncStatus = {
+  state: 'idle',
+  pending: 0,
+  lastSyncedAt: null,
+  lastError: null,
+};
 
 const COLLECTION_KEYS = [
   'incomes', 'incomeTypes',
@@ -43,9 +50,13 @@ function emptyDocument() {
   return doc;
 }
 
+function scopedStorageKey(userId = currentUserId) {
+  return userId ? `${STORAGE_KEY}:${userId}` : `${STORAGE_KEY}:anonymous`;
+}
+
 function readLocalCache() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(scopedStorageKey());
     return raw ? JSON.parse(raw) : null;
   } catch (error) {
     console.error('StorageService: no se pudo leer la caché local', error);
@@ -55,7 +66,7 @@ function readLocalCache() {
 
 function writeLocalCache(document) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
+    localStorage.setItem(scopedStorageKey(), JSON.stringify(document));
     return true;
   } catch (error) {
     console.error('StorageService: no se pudo escribir la caché local', error);
@@ -63,28 +74,62 @@ function writeLocalCache(document) {
   }
 }
 
-async function deleteRemote() {
-  if (!currentUserId) return;
-  const { error } = await supabase.from('app_data').delete().eq('user_id', currentUserId);
+function removeLocalCache() {
+  try {
+    localStorage.removeItem(scopedStorageKey());
+    return true;
+  } catch (error) {
+    console.error('StorageService: no se pudo eliminar la caché local', error);
+    return false;
+  }
+}
+
+// La primera versión con Supabase usaba una clave global. Se conserva solo como migración
+// puntual de instalaciones existentes; después de asignarla al primer usuario autenticado se
+// elimina para que nunca vuelva a servir como fallback compartido entre cuentas.
+function migrateLegacyLocalCache(userId) {
+  try {
+    const legacy = userId && localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!legacy || localStorage.getItem(scopedStorageKey(userId))) return;
+    localStorage.setItem(scopedStorageKey(userId), legacy);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch (error) {
+    console.error('StorageService: no se pudo migrar la caché local heredada', error);
+  }
+}
+
+function setSyncStatus(partial) {
+  syncStatus = { ...syncStatus, ...partial };
+  emit('sync:status', { ...syncStatus });
+}
+
+function markSyncError(error) {
+  setSyncStatus({ state: 'error', lastError: error });
+  emit('sync:error', error);
+}
+
+async function deleteRemoteNow(userId) {
+  if (!userId) return;
+  const { error } = await supabase.from('app_data').delete().eq('user_id', userId);
   if (error) throw error;
 }
 
-async function readRemote() {
-  if (!currentUserId) return null;
+async function readRemote(userId = currentUserId) {
+  if (!userId) return null;
   const { data, error } = await supabase
     .from('app_data')
     .select('doc')
-    .eq('user_id', currentUserId)
+    .eq('user_id', userId)
     .maybeSingle();
   if (error) throw error;
   return data ? data.doc : null;
 }
 
-async function writeRemoteNow(document) {
-  if (!currentUserId) return;
+async function writeRemoteNow(document, userId) {
+  if (!userId) return;
   const { error } = await supabase
     .from('app_data')
-    .upsert({ user_id: currentUserId, doc: document, updated_at: new Date().toISOString() });
+    .upsert({ user_id: userId, doc: document, updated_at: new Date().toISOString() });
   if (error) throw error;
 }
 
@@ -96,12 +141,53 @@ async function writeRemoteNow(document) {
 // el documento COMPLETO más reciente en el momento en que le toca su turno (no un diff), así que
 // encadenarlas garantiza que la última en encolarse sea también la última en aplicarse.
 let remoteWriteQueue = Promise.resolve();
-function writeRemote(document) {
-  const run = remoteWriteQueue.then(() => writeRemoteNow(document));
+let pendingRemoteOperations = 0;
+let queueHasFailure = false;
+
+function enqueueRemote(operation) {
+  if (!currentUserId) return Promise.resolve();
+
+  if (pendingRemoteOperations === 0) queueHasFailure = false;
+  pendingRemoteOperations += 1;
+  setSyncStatus({ state: 'syncing', pending: pendingRemoteOperations, lastError: null });
+
+  const run = remoteWriteQueue.then(operation);
   // Nunca dejar la cadena "rota" por un rechazo: si esta escritura falla, la siguiente debe
   // poder intentarlo de todos modos.
   remoteWriteQueue = run.catch(() => {});
-  return run;
+
+  return run.then((result) => {
+    pendingRemoteOperations -= 1;
+    if (pendingRemoteOperations === 0) {
+      setSyncStatus({
+        state: queueHasFailure ? 'error' : 'synced',
+        pending: 0,
+        lastSyncedAt: queueHasFailure ? syncStatus.lastSyncedAt : new Date().toISOString(),
+      });
+    } else {
+      setSyncStatus({ pending: pendingRemoteOperations });
+    }
+    return result;
+  }, (error) => {
+    pendingRemoteOperations -= 1;
+    queueHasFailure = true;
+    setSyncStatus({
+      state: pendingRemoteOperations === 0 ? 'error' : 'syncing',
+      pending: pendingRemoteOperations,
+      lastError: error,
+    });
+    throw error;
+  });
+}
+
+function writeRemote(document) {
+  const userId = currentUserId;
+  return enqueueRemote(() => writeRemoteNow(document, userId));
+}
+
+function deleteRemote() {
+  const userId = currentUserId;
+  return enqueueRemote(() => deleteRemoteNow(userId));
 }
 
 // Firma síncrona preservada (todos los llamadores existentes —State.setCollection/setSettings,
@@ -109,9 +195,12 @@ function writeRemote(document) {
 // sincroniza en segundo plano.
 function writeRaw(document) {
   const ok = writeLocalCache(document);
-  writeRemote(document).catch((error) => {
+  // Cada operación remota recibe una instantánea propia. Así, un reset que reasigna `doc` no
+  // puede convertir accidentalmente una escritura pendiente en un documento distinto.
+  const snapshot = JSON.parse(JSON.stringify(document));
+  writeRemote(snapshot).catch((error) => {
     console.error('StorageService: no se pudo sincronizar con Supabase', error);
-    emit('sync:error', error);
+    markSyncError(error);
   });
   return ok;
 }
@@ -306,7 +395,17 @@ const StorageService = {
    * fija de qué usuario leer/escribir en la tabla `app_data`. Sin esto, load()/init() solo
    * pueden recurrir a la caché local (comportamiento equivalente a estar sin sesión/sin red). */
   setUserId(userId) {
-    currentUserId = userId || null;
+    const nextUserId = userId || null;
+    if (currentUserId === nextUserId) return;
+    currentUserId = nextUserId;
+    doc = null;
+    syncStatus = {
+      state: 'idle',
+      pending: 0,
+      lastSyncedAt: null,
+      lastError: null,
+    };
+    migrateLegacyLocalCache(currentUserId);
   },
 
   /** Carga el documento. La nube es la fuente de verdad: si hay sesión y responde, se usa ese
@@ -324,7 +423,7 @@ const StorageService = {
         fromRemote = raw !== null;
       } catch (error) {
         console.error('StorageService: no se pudo leer Supabase, se usa la caché local', error);
-        emit('sync:error', error);
+        markSyncError(error);
       }
     }
     if (!raw) raw = readLocalCache();
@@ -333,7 +432,10 @@ const StorageService = {
     const migrated = migrate(raw);
     doc = migrated;
     if (migrated.version !== raw.version) writeRaw(migrated);
-    else if (!fromRemote) writeRemote(migrated).catch((error) => emit('sync:error', error));
+    else if (!fromRemote) {
+      writeLocalCache(migrated);
+      writeRemote(migrated).catch((error) => markSyncError(error));
+    }
     else writeLocalCache(migrated);
     return doc;
   },
@@ -388,17 +490,25 @@ const StorageService = {
     return this.set(collection, []);
   },
 
-  clear() {
+  async clear() {
     doc = emptyDocument();
-    localStorage.removeItem(STORAGE_KEY);
+    removeLocalCache();
     // BUG real corregido (ver docs/decisions.md): subir un documento VACÍO a la nube hacía que
     // el próximo load() lo encontrara como "ya hay datos, son 0 de todo" en vez de "no hay
     // nada" — eso impedía que init() volviera a sembrar los datos de ejemplo tras un reset,
     // que es justo lo que "Restablecer datos" promete en su propio subtítulo. Borrar la fila
     // (en vez de vaciarla) hace que el próximo load()/init() la trate como ausente, igual que
     // el caso de un usuario nuevo, y sí reseeding.
-    deleteRemote().catch((error) => emit('sync:error', error));
-    return true;
+    // El borrado entra en la misma cola que las escrituras. De esta forma no puede ser
+    // sobrescrito por una mutación que ya estaba esperando en segundo plano.
+    try {
+      await deleteRemote();
+      return true;
+    } catch (error) {
+      console.error('StorageService: no se pudieron eliminar los datos remotos', error);
+      markSyncError(error);
+      return false;
+    }
   },
 
   exportData() {
@@ -419,6 +529,10 @@ const StorageService = {
 
   getLastUpdated() {
     return doc ? doc.lastUpdated : null;
+  },
+
+  getSyncStatus() {
+    return { ...syncStatus };
   },
 };
 

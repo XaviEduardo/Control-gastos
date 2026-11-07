@@ -1,7 +1,12 @@
-# V2 — Roadmap técnico/funcional
+# V2 — Roadmap técnico/funcional (Histórico)
 
-> Solo planificación. Ninguna fase de este documento está implementada. Orden basado en
-> dependencias reales verificadas en el código actual (ver `v2-data-model.md`). Esfuerzo en
+> Este documento conserva el plan y sus criterios originales. Varias fases ya están implementadas
+> en el código; no tratar sus tareas como pendientes sin verificar [`current-architecture.md`](current-architecture.md)
+> y `js/core/storage.js`.
+
+> Documento histórico de planificación. La frase "ninguna fase está implementada" corresponde al
+> momento en que fue escrito y ya no es válida para todo el repositorio. El orden se basó en
+> dependencias verificadas en el código de aquella etapa (ver `v2-data-model.md`). Esfuerzo en
 > Bajo/Medio/Alto (sin horas). Prioridad P0 (necesaria antes de continuar) / P1 (alta) / P2
 > (mejora importante) / P3 (futuro).
 

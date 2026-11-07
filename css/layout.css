@@ -185,6 +185,59 @@
   padding: var(--space-lg);
 }
 
+/* Navegación primaria persistente en móvil: cinco destinos, objetivos táctiles amplios y
+   etiqueta visible para que el usuario no tenga que recordar el significado de un icono. */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 35;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-height: var(--mobile-nav-height);
+  padding: var(--space-xs) var(--space-xs) max(var(--space-xs), env(safe-area-inset-bottom));
+  background: var(--color-surface-elevated);
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 -4px 16px rgba(30, 27, 75, 0.06);
+}
+
+.mobile-nav__link {
+  display: flex;
+  min-width: 0;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex-direction: column;
+  padding: var(--space-xs) 2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--transition-standard), color var(--transition-standard);
+}
+
+.mobile-nav__link:hover,
+.mobile-nav__link:focus-visible,
+.mobile-nav__link--active {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.mobile-nav__icon { display: flex; line-height: 1; }
+.mobile-nav__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-xs);
+  line-height: 1.2;
+}
+
 .sidebar-toggle {
   display: none;
   position: fixed;
@@ -240,4 +293,4 @@
   transition: background var(--transition-fast);
 }
 .fab-add:hover { background: var(--color-primary-hover); }
-.fab-add .icon { color: #fff; }
+.fab-add .icon { color: var(--color-on-primary); }

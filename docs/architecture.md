@@ -1,4 +1,8 @@
-# Arquitectura — Control de Gastos (App Web Local)
+# Arquitectura v1 — Control de Gastos (Histórico)
+
+> Este documento describe la arquitectura original basada en almacenamiento local. La referencia
+> vigente es [`current-architecture.md`](current-architecture.md), que documenta Supabase,
+> autenticación, caché por usuario y sincronización tal como están implementados actualmente.
 
 ## Principios
 - Vanilla JS ES6+ (módulos nativos `type="module"`), HTML5, CSS3. Sin build step.

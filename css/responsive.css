@@ -82,8 +82,15 @@
   body.sidebar-open .sidebar { transform: translateX(0); }
   body.sidebar-open .sidebar-overlay { display: block; }
 
-  .sidebar-toggle { display: flex; }
-  .app-header { padding-left: 64px; }
+  .sidebar-toggle { display: none; }
+  .app-header { padding-left: var(--space-md); }
+  .mobile-nav { display: grid; }
+  .app-content {
+    padding-bottom: calc(var(--space-xl) + var(--mobile-nav-height) + env(safe-area-inset-bottom));
+  }
+  .fab-add {
+    bottom: calc(var(--mobile-nav-height) + max(16px, env(safe-area-inset-bottom)));
+  }
 
   /* Tabla → tarjetas (Productos, Tiendas, Historial de precios, Ingresos, Gastos). Misma
      fuente de datos (ver js/components/table.js): aquí solo se alterna qué vista es visible. */
@@ -107,22 +114,45 @@
      margen que deja .modal-overlay (var(--space-md), sin cambio) evita que quede pegado al
      borde real de la pantalla. .modal--compact (confirmaciones, ver confirm-dialog.js) NO
      tiene override aquí a propósito — nunca debe volverse full-screen. */
+  .modal-overlay { align-items: flex-end; padding: 0; }
   .modal--form {
     width: 100%;
     max-width: none;
-    height: 100%;
-    max-height: 100%;
+    height: auto;
+    max-height: min(88dvh, 760px);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .modal--compact {
+    width: calc(100% - var(--space-xl));
+    max-width: 420px;
+    margin: auto;
   }
 
   /* Pares de campos (Cantidad+Unidad, Precio+Fecha, etc.) vuelven a apilarse en móvil —
      .form-row solo aplica 2 columnas en desktop (ver css/components.css). */
   .form-row { flex-direction: column; }
+
+  .grocery-item-row {
+    grid-template-columns: 40px minmax(0, 1fr) 40px 40px;
+  }
+  .grocery-item-row__name {
+    min-width: 0;
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-medium);
+  }
+  .grocery-item-row__qty-wrap,
+  .grocery-item-row__field,
+  .grocery-item-row__subtotal-wrap { min-width: 0; }
+  .grocery-item-row__qty-wrap { width: 100%; }
+  .grocery-item-row__qty { flex: 0 0 72px; }
+  .grocery-item-row__qty-wrap select { flex: 1 1 auto; min-width: 0; }
+  .grocery-item-row__subtotal { font-size: var(--font-size-lg); }
 }
 
 @media (max-width: 480px) {
   .app-content { padding: var(--space-md); }
   /* Longhand (no shorthand) a propósito: no debe pisar el padding-top con safe-area
      que define la regla base de .app-header en css/layout.css. */
-  .app-header { padding-right: var(--space-md); padding-left: 60px; }
+  .app-header { padding-right: var(--space-md); padding-left: var(--space-md); }
   .empty-state { margin: var(--space-lg) auto; padding: var(--space-lg); }
 }

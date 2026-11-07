@@ -18,8 +18,7 @@ import { formatDateShort, parseFlexibleDate } from '../../core/dates.js';
 import { escapeHtml } from '../../core/validators.js';
 import { UNIT_OPTIONS } from '../grocery/units.js';
 import { openPriceForm } from './price-form.js';
-
-const CHART_COLORS = ['#4F46E5', '#17A567', '#C98A1E', '#DC4949', '#6b7280', '#0ea5e9', '#a855f7', '#f97316'];
+import { getChartPalette, getChartOptions } from '../../core/chart-theme.js';
 
 function unitLabel(value) {
   return UNIT_OPTIONS.find((u) => u.value === value)?.label || value;
@@ -212,6 +211,7 @@ export function renderPriceHistoryModule(container) {
     const storeIds = [...new Set(sorted.map((p) => p.storeId))];
     const baseUnit = normalizePrice(sorted[0].price, sorted[0].quantity, sorted[0].unit)?.baseUnit || '';
 
+    const chartColors = getChartPalette();
     const datasets = storeIds.map((storeId, i) => {
       const store = StoreRepository.getById(storeId);
       const byDate = new Map();
@@ -222,7 +222,7 @@ export function renderPriceHistoryModule(container) {
       return {
         label: store?.name || 'Tienda',
         data: dateLabels.map((d) => (byDate.has(d) ? byDate.get(d) : null)),
-        borderColor: CHART_COLORS[i % CHART_COLORS.length],
+        borderColor: chartColors[i % chartColors.length],
         backgroundColor: 'transparent',
         spanGaps: false,
         tension: 0.2,
@@ -238,7 +238,7 @@ export function renderPriceHistoryModule(container) {
     charts.push(new Chart(ctx, {
       type: 'line',
       data: { labels: dateLabels.map((d) => formatDateShort(d)), datasets },
-      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } },
+      options: getChartOptions({ yBeginAtZero: true }),
     }));
   }
 
